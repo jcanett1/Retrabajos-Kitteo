@@ -1,11 +1,7 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import react from '@vitejs/plugin-react' // o el plugin que uses
 
 export default defineConfig({
-  base: '/Retrabajos-Kitteo/',
+  base: '/Retrabajos-Kitteo/', // <- importante para GitHub Pages (project site)
   plugins: [react()],
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true
-  }
 })
