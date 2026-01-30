@@ -1,30 +1,46 @@
-import path from "path"
-import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import sourceIdentifierPlugin from 'vite-plugin-source-identifier'
+import react from "@vitejs/plugin-react"
+import path from "path"
 
-const isProd = process.env.BUILD_MODE === 'prod'
-
-// Configuración para GitHub Pages
 export default defineConfig({
-  // IMPORTANTE: Cambia "nombre-de-tu-repositorio" por el nombre real de tu repo
   base: '/Retrabajos-Kitteo/',
   
   plugins: [
-    react(),
-    sourceIdentifierPlugin({
-      enabled: !isProd,
-      attributePrefix: 'data-matrix',
-      includeProps: true,
+    react({
+      // Fuerza transformación JSX a JS
+      jsxRuntime: 'automatic',
+      babel: {
+        presets: ['@babel/preset-react', '@babel/preset-typescript']
+      }
     })
   ],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
+  
   build: {
     outDir: 'dist',
+    emptyOutDir: true,
     sourcemap: false,
-  }
+    target: 'es2020',
+    
+    // Configuración específica para asegurar JS
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html')
+      },
+      output: {
+        format: 'es',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
+  },
+  
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
+  
+  // Sirve archivos estáticos desde public/
+  publicDir: 'public'
 })
