@@ -1,7 +1,11 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react' // o el plugin que uses
 
-export default defineConfig({
-  base: '/Retrabajos-Kitteo/',
-  plugins: [react()],
+export default defineConfig(async () => {
+  // Import dinámico para cargar el plugin ESM-only sin requerir "type":"module"
+  const reactPlugin = (await import('@vitejs/plugin-react')).default
+
+  return {
+    base: '/Retrabajos-Kitteo/',
+    plugins: [reactPlugin()],
+  }
 })
