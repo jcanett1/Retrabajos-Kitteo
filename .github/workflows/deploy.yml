@@ -16,10 +16,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          # removed cache: 'npm' because no lockfile is present
 
       - name: Install dependencies
         run: npm install
+
+      - name: Ensure Vite is available
+        run: npm install vite @vitejs/plugin-react --no-save
 
       - name: Build
         run: npm run build
