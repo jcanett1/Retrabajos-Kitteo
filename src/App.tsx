@@ -70,7 +70,7 @@ function App() {
 
   // Load parts data
   useEffect(() => {
-    fetch('/parts_data.json')
+   fetch('parts_data.json')
       .then(res => res.json())
       .then(data => setPartsOptions(data))
       .catch(err => console.error('Error loading parts:', err))
