@@ -5,32 +5,35 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
+      
       - name: Install dependencies
         run: npm install
-
+      
       - name: Ensure Vite is available
         run: npm install vite @vitejs/plugin-react --no-save
-
+      
       - name: Build
         run: npm run build
-
+      
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           publish_dir: ./dist
           publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          nojekyll: true
-          keep_history: true
+          enable_jekyll: false
+          force_orphan: false
