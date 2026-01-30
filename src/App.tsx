@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Trash2, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
+import { Search, Plus, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
 import { supabase } from './supabaseClient'
 
 interface PartOption {
@@ -32,8 +32,7 @@ const HALLAZGO_OPTIONS = [
   'GRIP EXTRA',
   'SIN BANDERA Y SIN SELLO',
   'SHAFT MEZCLADO SIN ETIQUETA',
-  'SHAFT MEZCLADO CON ETIQUETA',
-  'ACCESORIO EQUIVOCADO'
+  'SHAFT MEZCLADO CON ETIQUETA'
 ]
 
 const USUARIOS = [
@@ -190,30 +189,7 @@ function App() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Está seguro de eliminar este registro?')) return
 
-    try {
-      setLoading(true)
-
-      const { error } = await supabase
-        .from('hallazgoskitteo')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-
-      showNotification('success', 'Registro eliminado exitosamente')
-      
-      // Reload records
-      await loadRegistros()
-    } catch (error) {
-      console.error('Error deleting record:', error)
-      showNotification('error', 'Error al eliminar el registro')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleSelectPart = (part: PartOption) => {
     setNoParte(part.id)
@@ -439,8 +415,7 @@ function App() {
                     <th className="px-4 py-3">Hallazgo</th>
                     <th className="px-4 py-3">No. de Parte</th>
                     <th className="px-4 py-3">Cantidad</th>
-                    <th className="px-4 py-3">Usuario</th>
-                    <th className="px-4 py-3 rounded-tr-lg">Acciones</th>
+                    <th className="px-4 py-3 rounded-tr-lg">Usuario</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,16 +435,6 @@ function App() {
                       <td className="px-4 py-3 text-sm">{registro.noParte}</td>
                       <td className="px-4 py-3 text-center font-medium">{registro.cantidad}</td>
                       <td className="px-4 py-3 text-gray-300">{registro.usuario}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleDelete(registro.id)}
-                          disabled={loading}
-                          className="p-2 text-red-400 hover:bg-red-600/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
