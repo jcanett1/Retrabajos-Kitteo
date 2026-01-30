@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Trash2, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Trash2, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
+import { supabase } from './supabaseClient'
 
 interface PartOption {
   id: string
@@ -10,12 +11,12 @@ interface Hallazgo {
   id: string
   fecha: string
   area: string
-  noOrden: string
+  no_orden: string
   hallazgo: string
-  noParte: string
+  no_parte: string
   cantidad: number
   usuario: string
-  timestamp: number
+  created_at?: string
 }
 
 const HALLAZGO_OPTIONS = [
@@ -53,6 +54,8 @@ const ITEMS_PER_PAGE = 100
 function App() {
   const [partsOptions, setPartsOptions] = useState<PartOption[]>([])
   const [registros, setRegistros] = useState<Hallazgo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
   // Modal state
   const [showPartsModal, setShowPartsModal] = useState(false)
@@ -68,26 +71,56 @@ function App() {
   const [cantidad, setCantidad] = useState(1)
   const [usuario, setUsuario] = useState('')
 
+  // Show notification helper
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 5000)
+  }
+
   // Load parts data
   useEffect(() => {
-   fetch('parts_data.json')
+    fetch('parts_data.json')
       .then(res => res.json())
       .then(data => setPartsOptions(data))
       .catch(err => console.error('Error loading parts:', err))
   }, [])
 
-  // Load saved records from localStorage
+  // Load records from Supabase
   useEffect(() => {
-    const saved = localStorage.getItem('kitteo_hallazgos')
-    if (saved) {
-      setRegistros(JSON.parse(saved))
-    }
+    loadRegistros()
   }, [])
 
-  // Save records to localStorage
-  useEffect(() => {
-    localStorage.setItem('kitteo_hallazgos', JSON.stringify(registros))
-  }, [registros])
+  const loadRegistros = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('hallazgoskitteo')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Transform data to match our interface
+      const transformedData = data.map(item => ({
+        id: item.id,
+        fecha: item.fecha,
+        area: item.area,
+        noOrden: item.no_orden,
+        hallazgo: item.hallazgo,
+        noParte: item.no_parte,
+        cantidad: item.cantidad,
+        usuario: item.usuario,
+        created_at: item.created_at
+      }))
+
+      setRegistros(transformedData)
+    } catch (error) {
+      console.error('Error loading records:', error)
+      showNotification('error', 'Error al cargar los registros')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filter parts based on search
   const filteredParts = partsOptions.filter(part =>
@@ -107,40 +140,77 @@ function App() {
     setCurrentPage(1)
   }, [modalSearch])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario) {
-      alert('Por favor complete todos los campos')
+      showNotification('error', 'Por favor complete todos los campos')
       return
     }
 
-    const nuevoRegistro: Hallazgo = {
-      id: Date.now().toString(),
-      fecha,
-      area: 'KITTEO',
-      noOrden,
-      hallazgo,
-      noParte,
-      cantidad,
-      usuario,
-      timestamp: Date.now()
+    try {
+      setLoading(true)
+
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('hallazgoskitteo')
+        .insert([
+          {
+            fecha,
+            area: 'KITTEO',
+            no_orden: noOrden,
+            hallazgo,
+            no_parte: noParte,
+            cantidad,
+            usuario
+          }
+        ])
+        .select()
+
+      if (error) throw error
+
+      showNotification('success', 'Hallazgo registrado exitosamente')
+
+      // Reload records
+      await loadRegistros()
+
+      // Reset form
+      setNoOrden('')
+      setHallazgo('')
+      setNoParte('')
+      setNoParteDisplay('')
+      setCantidad(1)
+      setUsuario('')
+    } catch (error) {
+      console.error('Error saving record:', error)
+      showNotification('error', 'Error al guardar el registro')
+    } finally {
+      setLoading(false)
     }
-
-    setRegistros(prev => [nuevoRegistro, ...prev])
-
-    // Reset form
-    setNoOrden('')
-    setHallazgo('')
-    setNoParte('')
-    setNoParteDisplay('')
-    setCantidad(1)
-    setUsuario('')
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Está seguro de eliminar este registro?')) {
-      setRegistros(prev => prev.filter(r => r.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Está seguro de eliminar este registro?')) return
+
+    try {
+      setLoading(true)
+
+      const { error } = await supabase
+        .from('hallazgoskitteo')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      showNotification('success', 'Registro eliminado exitosamente')
+      
+      // Reload records
+      await loadRegistros()
+    } catch (error) {
+      console.error('Error deleting record:', error)
+      showNotification('error', 'Error al eliminar el registro')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -175,6 +245,30 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 ${
+          notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          {notification.type === 'success' ? (
+            <CheckCircle className="w-5 h-5" />
+          ) : (
+            <AlertCircle className="w-5 h-5" />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+          <div className="bg-gray-800 rounded-lg px-8 py-6 flex items-center gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            <span className="text-lg">Procesando...</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-gradient-to-r from-blue-800 to-blue-600 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -300,7 +394,8 @@ function App() {
             <div className="flex items-end">
               <button
                 type="submit"
-                className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                disabled={loading}
+                className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-5 h-5" />
                 Registrar Hallazgo
@@ -367,7 +462,8 @@ function App() {
                       <td className="px-4 py-3">
                         <button
                           onClick={() => handleDelete(registro.id)}
-                          className="p-2 text-red-400 hover:bg-red-600/20 rounded-lg transition-colors"
+                          disabled={loading}
+                          className="p-2 text-red-400 hover:bg-red-600/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Eliminar"
                         >
                           <Trash2 className="w-4 h-4" />
