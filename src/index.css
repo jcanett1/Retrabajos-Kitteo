@@ -3,28 +3,27 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+:root {
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%
-  }
+    --sidebar-background: 0 0% 90%; /* Gris blanquecino */
+    --sidebar-foreground: 0 0% 0%; /* Negro puro */
+    --sidebar-primary: 0 0% 0%; /* Negro para elementos principales */
+    --sidebar-primary-foreground: 0 0% 90%; /* Gris blanquecino para texto sobre negro */
+    --sidebar-accent: 0 0% 85%; /* Gris ligeramente más claro */
+    --sidebar-accent-foreground: 0 0% 0%; /* Negro para texto sobre acento */
+    --sidebar-border: 0 0% 80%; /* Gris para bordes */
+    --sidebar-ring: 0 0% 0%; /* Negro para anillos/focus */
+}
 
-  .dark {
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%
-  }
+.dark {
+    --sidebar-background: 0 0% 15%; /* Gris oscuro para modo oscuro */
+    --sidebar-foreground: 0 0% 85%; /* Gris claro para texto */
+    --sidebar-primary: 0 0% 0%; /* Negro para elementos principales */
+    --sidebar-primary-foreground: 0 0% 85%; /* Gris claro para texto sobre negro */
+    --sidebar-accent: 0 0% 20%; /* Gris oscuro para acentos */
+    --sidebar-accent-foreground: 0 0% 85%; /* Gris claro para texto sobre acento */
+    --sidebar-border: 0 0% 25%; /* Gris medio para bordes */
+    --sidebar-ring: 0 0% 0%; /* Negro para anillos/focus */
 }
 
 
