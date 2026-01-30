@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-:root {
+  :root {
     --radius: 0.5rem;
     --sidebar-background: 0 0% 90%; /* Gris blanquecino */
     --sidebar-foreground: 0 0% 0%; /* Negro puro */
@@ -13,9 +13,9 @@
     --sidebar-accent-foreground: 0 0% 0%; /* Negro para texto sobre acento */
     --sidebar-border: 0 0% 80%; /* Gris para bordes */
     --sidebar-ring: 0 0% 0%; /* Negro para anillos/focus */
-}
+  }
 
-.dark {
+  .dark {
     --sidebar-background: 0 0% 15%; /* Gris oscuro para modo oscuro */
     --sidebar-foreground: 0 0% 85%; /* Gris claro para texto */
     --sidebar-primary: 0 0% 0%; /* Negro para elementos principales */
@@ -24,14 +24,15 @@
     --sidebar-accent-foreground: 0 0% 85%; /* Gris claro para texto sobre acento */
     --sidebar-border: 0 0% 25%; /* Gris medio para bordes */
     --sidebar-ring: 0 0% 0%; /* Negro para anillos/focus */
+  }
 }
 
-
-
-img {
-  object-position: top;
-}
-
-.fixed {
-  position: fixed;
+@layer base {
+  img {
+    object-position: top;
+  }
+  
+  .fixed {
+    position: fixed;
+  }
 }
