@@ -1,36 +1,38 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['class'],
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    './index.html',
+    './src/**/*.{ts,tsx}',
   ],
   theme: {
+    container: {
+      center: true,
+      padding: '2rem',
+      screens: {
+        '2xl': '1400px',
+      },
+    },
     extend: {
       colors: {
-        // Solo los colores que NECESITAS
-        gray: {
-          750: '#2d3748',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: '#2B5D3A',
         },
-        blue: {
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
+        secondary: {
+          DEFAULT: '#4A90E2',
         },
-        green: {
-          400: '#4ade80',
-          600: '#16a34a',
-        },
-        red: {
-          400: '#f87171',
-          600: '#dc2626',
-        },
-        yellow: {
-          300: '#fde047',
-          600: '#ca8a04',
-        }
-      }
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
     },
   },
-  // Elimina plugins complejos temporalmente
-  plugins: [],
+  plugins: [require('tailwindcss-animate')],
 }
