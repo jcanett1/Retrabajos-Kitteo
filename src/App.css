@@ -1,5 +1,7 @@
 #root {
   margin: 0 auto;
+  /* Si quieres cambiar el fondo general */
+  /* background-color: #f5f5f5;  Gris blanquecino */
 }
 
 .logo {
@@ -10,11 +12,13 @@
 }
 
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  /* Cambiando el azul (#646cffaa) a negro */
+  filter: drop-shadow(0 0 2em rgba(0, 0, 0, 0.67)); /* Negro semi-transparente */
 }
 
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  /* Cambiando el azul (#61dafbaa) a gris oscuro */
+  filter: drop-shadow(0 0 2em rgba(50, 50, 50, 0.67)); /* Gris oscuro */
 }
 
 @keyframes logo-spin {
@@ -35,8 +39,13 @@
 
 .card {
   padding: 2em;
+  /* Si quieres fondo gris blanquecino para las cards */
+  /* background-color: #f0f0f0; */
 }
 
 .read-the-docs {
-  color: #888;
+  /* Cambiando el color gris (#888) a uno más oscuro o diferente */
+  color: #666; /* Gris más oscuro */
+  /* O si quieres negro: */
+  /* color: #000; */
 }
