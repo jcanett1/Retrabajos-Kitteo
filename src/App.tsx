@@ -143,56 +143,59 @@ function App() {
     setCurrentPage(1)
   }, [modalSearch])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
 
-    if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario || !usuarioKitteo) {
-      showNotification('error', 'Por favor complete todos los campos')
-      return
-    }
-
-    try {
-      setLoading(true)
-
-      // Insert into Supabase
-      const { data, error } = await supabase
-        .from('hallazgoskitteo')
-        .insert([
-          {
-            fecha,
-            area: 'KITTEO',
-            no_orden: noOrden,
-            hallazgo,
-            no_parte: noParte,
-            cantidad,
-            usuario,
-            usuario_kitteo: usuarioKitteo
-          }
-        ])
-        .select()
-
-      if (error) throw error
-
-      showNotification('success', 'Hallazgo registrado exitosamente')
-
-      // Reload records
-      await loadRegistros()
-
-      // Reset form
-      setNoOrden('')
-      setHallazgo('')
-      setNoParte('')
-      setNoParteDisplay('')
-      setCantidad(1)
-      setUsuario('')
-      setUsuarioKitteo('')
-    } catch (error) {
-      console.error('Error saving record:', error)
-      showNotification('error', 'Error al guardar el registro')
-    } finally {
-      setLoading(false)
-    }
+  if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario || !usuarioKitteo) {
+    showNotification('error', 'Por favor complete todos los campos')
+    return
   }
+
+  try {
+    setLoading(true)
+
+    // Insert into Supabase - CORREGIDO: removí el parámetro columns de la URL
+    const { data, error } = await supabase
+      .from('hallazgoskitteo')
+      .insert([
+        {
+          fecha,
+          area: 'KITTEO',
+          no_orden: noOrden,
+          hallazgo,
+          no_parte: noParte,
+          cantidad,
+          usuario,
+          usuario_kitteo: usuarioKitteo
+        }
+      ])
+      .select()
+
+    if (error) {
+      console.error('Supabase error:', error)
+      throw error
+    }
+
+    showNotification('success', 'Hallazgo registrado exitosamente')
+
+    // Reload records
+    await loadRegistros()
+
+    // Reset form
+    setNoOrden('')
+    setHallazgo('')
+    setNoParte('')
+    setNoParteDisplay('')
+    setCantidad(1)
+    setUsuario('')
+    setUsuarioKitteo('')
+  } catch (error) {
+    console.error('Error saving record:', error)
+    showNotification('error', 'Error al guardar el registro')
+  } finally {
+    setLoading(false)
+  }
+}
 
   const handleSelectPart = (part: PartOption) => {
     setNoParte(part.id)
