@@ -16,6 +16,7 @@ interface Hallazgo {
   no_parte: string
   cantidad: number
   usuario: string
+  usuario_kitteo?: string
   created_at?: string
 }
 
@@ -70,6 +71,7 @@ function App() {
   const [noParteDisplay, setNoParteDisplay] = useState('')
   const [cantidad, setCantidad] = useState(1)
   const [usuario, setUsuario] = useState('')
+  const [usuarioKitteo, setUsuarioKitteo] = useState('')
 
   // Show notification helper
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -110,6 +112,7 @@ function App() {
         noParte: item.no_parte,
         cantidad: item.cantidad,
         usuario: item.usuario,
+        usuario_kitteo: item.usuario_kitteo,
         created_at: item.created_at
       }))
 
@@ -143,7 +146,7 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario) {
+    if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario || !usuarioKitteo) {
       showNotification('error', 'Por favor complete todos los campos')
       return
     }
@@ -162,7 +165,8 @@ function App() {
             hallazgo,
             no_parte: noParte,
             cantidad,
-            usuario
+            usuario,
+            usuario_kitteo: usuarioKitteo
           }
         ])
         .select()
@@ -181,6 +185,7 @@ function App() {
       setNoParteDisplay('')
       setCantidad(1)
       setUsuario('')
+      setUsuarioKitteo('')
     } catch (error) {
       console.error('Error saving record:', error)
       showNotification('error', 'Error al guardar el registro')
@@ -188,8 +193,6 @@ function App() {
       setLoading(false)
     }
   }
-
-
 
   const handleSelectPart = (part: PartOption) => {
     setNoParte(part.id)
@@ -199,7 +202,7 @@ function App() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'Cantidad', 'Usuario']
+    const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'Cantidad', 'Usuario', 'Usuario Kitteo']
     const csvContent = [
       headers.join(','),
       ...registros.map(r => [
@@ -209,7 +212,8 @@ function App() {
         `"${r.hallazgo}"`,
         r.noParte,
         r.cantidad,
-        `"${r.usuario}"`
+        `"${r.usuario}"`,
+        `"${r.usuario_kitteo || ''}"`
       ].join(','))
     ].join('\n')
 
@@ -352,7 +356,7 @@ function App() {
             </div>
 
             {/* Usuario - Select */}
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Usuario que Registra *</label>
               <select
                 value={usuario}
@@ -365,6 +369,19 @@ function App() {
                   <option key={usr} value={usr}>{usr}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Usuario de Kitteo - Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Usuario de Kitteo *</label>
+              <input
+                type="text"
+                value={usuarioKitteo}
+                onChange={e => setUsuarioKitteo(e.target.value.toUpperCase())}
+                placeholder="Nombre o iniciales"
+                className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent text-gray-900"
+                required
+              />
             </div>
 
             {/* Submit Button */}
@@ -415,7 +432,8 @@ function App() {
                     <th className="px-4 py-3">Hallazgo</th>
                     <th className="px-4 py-3">No. de Parte</th>
                     <th className="px-4 py-3">Cantidad</th>
-                    <th className="px-4 py-3 rounded-tr-lg">Usuario</th>
+                    <th className="px-4 py-3">Usuario</th>
+                    <th className="px-4 py-3 rounded-tr-lg">Usuario Kitteo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -435,6 +453,7 @@ function App() {
                       <td className="px-4 py-3 text-sm text-gray-700">{registro.noParte}</td>
                       <td className="px-4 py-3 text-center font-medium text-gray-900">{registro.cantidad}</td>
                       <td className="px-4 py-3 text-gray-700">{registro.usuario}</td>
+                      <td className="px-4 py-3 text-gray-700">{registro.usuario_kitteo || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
