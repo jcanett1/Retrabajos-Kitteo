@@ -252,7 +252,7 @@ function App() {
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="w-10 h-10" />
             <div>
-              <h1 className="text-3xl font-bold">KITTEO</h1>
+              <h1 className="text-3xl font-bold">PXG KITTEO</h1>
               <p className="text-gray-200">Sistema de Registro de Hallazgos</p>
             </div>
           </div>
@@ -542,7 +542,8 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white mt-8 py-4 text-center text-gray-600 text-sm border-t border-gray-200">
-        <p>KITTEO - Sistema de Registro de Hallazgos &copy; {new Date().getFullYear()}</p>
+        <p>PXG KITTEO - Sistema de Registro de Hallazgos &copy; {new Date().getFullYear()}</p>
+        <p>Creado por IT PXG trquila - julio canett para soporte</p>
       </footer>
     </div>
   )
