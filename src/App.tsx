@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Search, Plus, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Search, Plus, Download, FileSpreadsheet, X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, Filter } from 'lucide-react'
 import { supabase } from './supabaseClient'
 
 interface PartOption {
@@ -19,6 +19,9 @@ interface Hallazgo {
   usuario_kitteo?: string
   no_parte_requerido?: string
   created_at?: string
+  // mapped fields
+  noOrden?: string
+  noParte?: string
 }
 
 const HALLAZGO_OPTIONS = [
@@ -51,7 +54,8 @@ const USUARIOS = [
   'DIANA'
 ]
 
-const ITEMS_PER_PAGE = 100
+const RECORDS_PER_PAGE = 100
+const PARTS_PER_PAGE = 100
 
 function App() {
   const [partsOptions, setPartsOptions] = useState<PartOption[]>([])
@@ -59,15 +63,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
-  // Modal state - No. de Parte (encontrado)
+  // Modal state - No. de Parte
   const [showPartsModal, setShowPartsModal] = useState(false)
   const [modalSearch, setModalSearch] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPartsPage, setCurrentPartsPage] = useState(1)
 
   // Modal state - No. de Parte REQUERIDO
   const [showPartsRequeridoModal, setShowPartsRequeridoModal] = useState(false)
   const [modalRequeridoSearch, setModalRequeridoSearch] = useState('')
-  const [currentPageRequerido, setCurrentPageRequerido] = useState(1)
+  const [currentPartsRequeridoPage, setCurrentPartsRequeridoPage] = useState(1)
 
   // Form state
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -81,13 +85,19 @@ function App() {
   const [usuario, setUsuario] = useState('')
   const [usuarioKitteo, setUsuarioKitteo] = useState('')
 
-  // Show notification helper
+  // Filter state
+  const [filterFechaDesde, setFilterFechaDesde] = useState('')
+  const [filterFechaHasta, setFilterFechaHasta] = useState('')
+  const [filterUsuario, setFilterUsuario] = useState('')
+
+  // Pagination state for records list
+  const [recordsPage, setRecordsPage] = useState(1)
+
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
     setTimeout(() => setNotification(null), 5000)
   }
 
-  // Load parts data
   useEffect(() => {
     fetch('parts_data.json')
       .then(res => res.json())
@@ -95,7 +105,6 @@ function App() {
       .catch(err => console.error('Error loading parts:', err))
   }, [])
 
-  // Load records from Supabase
   useEffect(() => {
     loadRegistros()
   }, [])
@@ -114,8 +123,10 @@ function App() {
         id: item.id,
         fecha: item.fecha,
         area: item.area,
+        no_orden: item.no_orden,
         noOrden: item.no_orden,
         hallazgo: item.hallazgo,
+        no_parte: item.no_parte,
         noParte: item.no_parte,
         cantidad: item.cantidad,
         usuario: item.usuario,
@@ -133,39 +144,58 @@ function App() {
     }
   }
 
-  // Filter parts - No. de Parte
+  // --- Parts modal filtering ---
   const filteredParts = partsOptions.filter(part =>
     part.id.toLowerCase().includes(modalSearch.toLowerCase()) ||
     part.description.toLowerCase().includes(modalSearch.toLowerCase())
   )
-
-  const totalPages = Math.ceil(filteredParts.length / ITEMS_PER_PAGE)
+  const totalPartsPages = Math.ceil(filteredParts.length / PARTS_PER_PAGE)
   const paginatedParts = filteredParts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPartsPage - 1) * PARTS_PER_PAGE,
+    currentPartsPage * PARTS_PER_PAGE
   )
 
-  // Filter parts - No. de Parte REQUERIDO
   const filteredPartsRequerido = partsOptions.filter(part =>
     part.id.toLowerCase().includes(modalRequeridoSearch.toLowerCase()) ||
     part.description.toLowerCase().includes(modalRequeridoSearch.toLowerCase())
   )
-
-  const totalPagesRequerido = Math.ceil(filteredPartsRequerido.length / ITEMS_PER_PAGE)
+  const totalPartsRequeridoPages = Math.ceil(filteredPartsRequerido.length / PARTS_PER_PAGE)
   const paginatedPartsRequerido = filteredPartsRequerido.slice(
-    (currentPageRequerido - 1) * ITEMS_PER_PAGE,
-    currentPageRequerido * ITEMS_PER_PAGE
+    (currentPartsRequeridoPage - 1) * PARTS_PER_PAGE,
+    currentPartsRequeridoPage * PARTS_PER_PAGE
   )
 
-  // Reset pages when search changes
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [modalSearch])
+  useEffect(() => { setCurrentPartsPage(1) }, [modalSearch])
+  useEffect(() => { setCurrentPartsRequeridoPage(1) }, [modalRequeridoSearch])
 
-  useEffect(() => {
-    setCurrentPageRequerido(1)
-  }, [modalRequeridoSearch])
+  // --- Records filtering ---
+  const filteredRegistros = useMemo(() => {
+    return registros.filter(r => {
+      if (filterFechaDesde && r.fecha < filterFechaDesde) return false
+      if (filterFechaHasta && r.fecha > filterFechaHasta) return false
+      if (filterUsuario && r.usuario !== filterUsuario) return false
+      return true
+    })
+  }, [registros, filterFechaDesde, filterFechaHasta, filterUsuario])
 
+  // Reset records page when filters change
+  useEffect(() => { setRecordsPage(1) }, [filterFechaDesde, filterFechaHasta, filterUsuario])
+
+  const totalRecordsPages = Math.ceil(filteredRegistros.length / RECORDS_PER_PAGE)
+  const paginatedRegistros = filteredRegistros.slice(
+    (recordsPage - 1) * RECORDS_PER_PAGE,
+    recordsPage * RECORDS_PER_PAGE
+  )
+
+  const clearFilters = () => {
+    setFilterFechaDesde('')
+    setFilterFechaHasta('')
+    setFilterUsuario('')
+  }
+
+  const hasActiveFilters = filterFechaDesde || filterFechaHasta || filterUsuario
+
+  // --- Form submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -177,21 +207,19 @@ function App() {
     try {
       setLoading(true)
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('hallazgoskitteo')
-        .insert([
-          {
-            fecha,
-            area: 'KITTEO',
-            no_orden: noOrden,
-            hallazgo,
-            no_parte: noParte,
-            no_parte_requerido: noParteRequerido,
-            cantidad,
-            usuario,
-            usuario_kitteo: usuarioKitteo
-          }
-        ])
+        .insert([{
+          fecha,
+          area: 'KITTEO',
+          no_orden: noOrden,
+          hallazgo,
+          no_parte: noParte,
+          no_parte_requerido: noParteRequerido,
+          cantidad,
+          usuario,
+          usuario_kitteo: usuarioKitteo
+        }])
         .select()
 
       if (error) {
@@ -200,10 +228,8 @@ function App() {
       }
 
       showNotification('success', 'Hallazgo registrado exitosamente')
-
       await loadRegistros()
 
-      // Reset form
       setNoOrden('')
       setHallazgo('')
       setNoParte('')
@@ -239,7 +265,7 @@ function App() {
     const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
     const csvContent = [
       headers.join(','),
-      ...registros.map(r => [
+      ...filteredRegistros.map(r => [
         r.fecha,
         r.area,
         r.noOrden,
@@ -319,7 +345,7 @@ function App() {
               />
             </div>
 
-            {/* Area - Bloqueado como KITTEO */}
+            {/* Area */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
               <input
@@ -359,7 +385,7 @@ function App() {
               </select>
             </div>
 
-            {/* No. de Parte - Opens Modal */}
+            {/* No. de Parte */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">No. de Parte *</label>
               <button
@@ -367,7 +393,7 @@ function App() {
                 onClick={() => setShowPartsModal(true)}
                 className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-left hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:border-transparent flex items-center justify-between text-gray-900"
               >
-                <span className={noParteDisplay ? 'text-gray-900 truncate' : 'text-gray-500'}>
+                <span className={`truncate ${noParteDisplay ? 'text-gray-900' : 'text-gray-500'}`}>
                   {noParteDisplay || 'Seleccionar número de parte...'}
                 </span>
                 <Search className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
@@ -377,7 +403,7 @@ function App() {
               )}
             </div>
 
-            {/* No. de Parte REQUERIDO - Opens Modal */}
+            {/* No. de Parte REQUERIDO */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">No. de Parte REQUERIDO *</label>
               <button
@@ -385,7 +411,7 @@ function App() {
                 onClick={() => setShowPartsRequeridoModal(true)}
                 className="w-full px-4 py-2 bg-white border border-blue-400 rounded-lg text-left hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900"
               >
-                <span className={noParteRequeridoDisplay ? 'text-gray-900 truncate' : 'text-gray-500'}>
+                <span className={`truncate ${noParteRequeridoDisplay ? 'text-gray-900' : 'text-gray-500'}`}>
                   {noParteRequeridoDisplay || 'Seleccionar parte requerida...'}
                 </span>
                 <Search className="w-4 h-4 text-blue-500 flex-shrink-0 ml-2" />
@@ -408,7 +434,7 @@ function App() {
               />
             </div>
 
-            {/* Usuario - Select */}
+            {/* Usuario */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Usuario que Registra *</label>
               <select
@@ -424,7 +450,7 @@ function App() {
               </select>
             </div>
 
-            {/* Usuario de Kitteo - Input */}
+            {/* Usuario de Kitteo */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Usuario de Kitteo *</label>
               <input
@@ -453,9 +479,14 @@ function App() {
 
         {/* Records Section */}
         <div className="bg-white rounded-xl shadow-xl p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Registros ({registros.length})
+          {/* Header row */}
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5" />
+              Registros
+              <span className="text-sm font-normal text-gray-500">
+                ({filteredRegistros.length} {hasActiveFilters ? 'filtrados de ' + registros.length : 'total'})
+              </span>
             </h2>
             {registros.length > 0 && (
               <button
@@ -468,60 +499,167 @@ function App() {
             )}
           </div>
 
-          {registros.length === 0 ? (
+          {/* Filters */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-600" />
+              <span className="text-sm font-semibold text-gray-700">Filtros</span>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="ml-auto text-xs px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full transition-colors flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Fecha Desde */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                <input
+                  type="date"
+                  value={filterFechaDesde}
+                  onChange={e => setFilterFechaDesde(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent text-gray-900"
+                />
+              </div>
+              {/* Fecha Hasta */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                <input
+                  type="date"
+                  value={filterFechaHasta}
+                  onChange={e => setFilterFechaHasta(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent text-gray-900"
+                />
+              </div>
+              {/* Usuario */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Usuario que registra</label>
+                <select
+                  value={filterUsuario}
+                  onChange={e => setFilterUsuario(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent text-gray-900"
+                >
+                  <option value="">Todos los usuarios</option>
+                  {USUARIOS.map(usr => (
+                    <option key={usr} value={usr}>{usr}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {filteredRegistros.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>No hay registros aún</p>
-              <p className="text-sm">Los hallazgos registrados aparecerán aquí</p>
+              {registros.length === 0 ? (
+                <>
+                  <p>No hay registros aún</p>
+                  <p className="text-sm">Los hallazgos registrados aparecerán aquí</p>
+                </>
+              ) : (
+                <>
+                  <p>No hay registros que coincidan con los filtros</p>
+                  <button onClick={clearFilters} className="mt-2 text-sm text-blue-600 hover:underline">
+                    Limpiar filtros
+                  </button>
+                </>
+              )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-200 text-left text-gray-800">
-                    <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
-                    <th className="px-4 py-3">Área</th>
-                    <th className="px-4 py-3">No. Orden</th>
-                    <th className="px-4 py-3">Hallazgo</th>
-                    <th className="px-4 py-3">No. de Parte</th>
-                    <th className="px-4 py-3">No. de Parte Requerido</th>
-                    <th className="px-4 py-3">Cantidad</th>
-                    <th className="px-4 py-3">Usuario</th>
-                    <th className="px-4 py-3 rounded-tr-lg">Usuario Kitteo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registros.map((registro, idx) => (
-                    <tr
-                      key={registro.id}
-                      className={`border-b border-gray-200 hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                    >
-                      <td className="px-4 py-3 text-gray-900">{registro.fecha}</td>
-                      <td className="px-4 py-3 font-medium text-gray-700">{registro.area}</td>
-                      <td className="px-4 py-3 text-gray-900">{registro.noOrden}</td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm border border-yellow-300">
-                          {registro.hallazgo}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{registro.noParte}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {registro.no_parte_requerido ? (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm border border-blue-300">
-                            {registro.no_parte_requerido}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center font-medium text-gray-900">{registro.cantidad}</td>
-                      <td className="px-4 py-3 text-gray-700">{registro.usuario}</td>
-                      <td className="px-4 py-3 text-gray-700">{registro.usuario_kitteo || '-'}</td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-200 text-left text-gray-800">
+                      <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
+                      <th className="px-4 py-3">Área</th>
+                      <th className="px-4 py-3">No. Orden</th>
+                      <th className="px-4 py-3">Hallazgo</th>
+                      <th className="px-4 py-3">No. de Parte</th>
+                      <th className="px-4 py-3">No. de Parte Requerido</th>
+                      <th className="px-4 py-3">Cantidad</th>
+                      <th className="px-4 py-3">Usuario</th>
+                      <th className="px-4 py-3 rounded-tr-lg">Usuario Kitteo</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginatedRegistros.map((registro, idx) => (
+                      <tr
+                        key={registro.id}
+                        className={`border-b border-gray-200 hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      >
+                        <td className="px-4 py-3 text-gray-900">{registro.fecha}</td>
+                        <td className="px-4 py-3 font-medium text-gray-700">{registro.area}</td>
+                        <td className="px-4 py-3 text-gray-900">{registro.noOrden}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm border border-yellow-300">
+                            {registro.hallazgo}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{registro.noParte}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {registro.no_parte_requerido ? (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm border border-blue-300">
+                              {registro.no_parte_requerido}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center font-medium text-gray-900">{registro.cantidad}</td>
+                        <td className="px-4 py-3 text-gray-700">{registro.usuario}</td>
+                        <td className="px-4 py-3 text-gray-700">{registro.usuario_kitteo || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination for records */}
+              {totalRecordsPages > 1 && (
+                <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+                  <div className="text-sm text-gray-600">
+                    Mostrando {((recordsPage - 1) * RECORDS_PER_PAGE) + 1}–{Math.min(recordsPage * RECORDS_PER_PAGE, filteredRegistros.length)} de {filteredRegistros.length} registros
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRecordsPage(p => Math.max(1, p - 1))}
+                      disabled={recordsPage === 1}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Anterior
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm text-gray-600">Página</span>
+                      <select
+                        value={recordsPage}
+                        onChange={e => setRecordsPage(parseInt(e.target.value))}
+                        className="px-2 py-1 bg-white border border-gray-300 rounded-lg text-sm text-gray-900"
+                      >
+                        {Array.from({ length: totalRecordsPages }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>{i + 1}</option>
+                        ))}
+                      </select>
+                      <span className="text-sm text-gray-600">de {totalRecordsPages}</span>
+                    </div>
+                    <button
+                      onClick={() => setRecordsPage(p => Math.min(totalRecordsPages, p + 1))}
+                      disabled={recordsPage === totalRecordsPages}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -533,10 +671,7 @@ function App() {
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-xl font-semibold text-gray-800">Seleccionar Número de Parte</h3>
               <button
-                onClick={() => {
-                  setShowPartsModal(false)
-                  setModalSearch('')
-                }}
+                onClick={() => { setShowPartsModal(false); setModalSearch('') }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-600" />
@@ -560,9 +695,7 @@ function App() {
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {paginatedParts.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No se encontraron resultados</p>
-                </div>
+                <div className="text-center py-8 text-gray-500"><p>No se encontraron resultados</p></div>
               ) : (
                 <div className="grid gap-2">
                   {paginatedParts.map(part => (
@@ -578,36 +711,34 @@ function App() {
                 </div>
               )}
             </div>
-            {totalPages > 1 && (
+            {totalPartsPages > 1 && (
               <div className="p-4 border-t border-gray-200 flex items-center justify-between">
                 <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPartsPage(p => Math.max(1, p - 1))}
+                  disabled={currentPartsPage === 1}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  Anterior
+                  <ChevronLeft className="w-4 h-4" /> Anterior
                 </button>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-600">Página</span>
                   <select
-                    value={currentPage}
-                    onChange={e => setCurrentPage(parseInt(e.target.value))}
+                    value={currentPartsPage}
+                    onChange={e => setCurrentPartsPage(parseInt(e.target.value))}
                     className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-gray-900"
                   >
-                    {Array.from({ length: totalPages }, (_, i) => (
+                    {Array.from({ length: totalPartsPages }, (_, i) => (
                       <option key={i + 1} value={i + 1}>{i + 1}</option>
                     ))}
                   </select>
-                  <span className="text-gray-600">de {totalPages}</span>
+                  <span className="text-gray-600">de {totalPartsPages}</span>
                 </div>
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPartsPage(p => Math.min(totalPartsPages, p + 1))}
+                  disabled={currentPartsPage === totalPartsPages}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Siguiente
-                  <ChevronRight className="w-4 h-4" />
+                  Siguiente <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             )}
@@ -622,10 +753,7 @@ function App() {
             <div className="p-4 border-b border-blue-200 flex justify-between items-center bg-blue-50 rounded-t-xl">
               <h3 className="text-xl font-semibold text-blue-800">Seleccionar No. de Parte REQUERIDO</h3>
               <button
-                onClick={() => {
-                  setShowPartsRequeridoModal(false)
-                  setModalRequeridoSearch('')
-                }}
+                onClick={() => { setShowPartsRequeridoModal(false); setModalRequeridoSearch('') }}
                 className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-blue-600" />
@@ -649,9 +777,7 @@ function App() {
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {paginatedPartsRequerido.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No se encontraron resultados</p>
-                </div>
+                <div className="text-center py-8 text-gray-500"><p>No se encontraron resultados</p></div>
               ) : (
                 <div className="grid gap-2">
                   {paginatedPartsRequerido.map(part => (
@@ -667,36 +793,34 @@ function App() {
                 </div>
               )}
             </div>
-            {totalPagesRequerido > 1 && (
+            {totalPartsRequeridoPages > 1 && (
               <div className="p-4 border-t border-gray-200 flex items-center justify-between">
                 <button
-                  onClick={() => setCurrentPageRequerido(p => Math.max(1, p - 1))}
-                  disabled={currentPageRequerido === 1}
+                  onClick={() => setCurrentPartsRequeridoPage(p => Math.max(1, p - 1))}
+                  disabled={currentPartsRequeridoPage === 1}
                   className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  Anterior
+                  <ChevronLeft className="w-4 h-4" /> Anterior
                 </button>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-600">Página</span>
                   <select
-                    value={currentPageRequerido}
-                    onChange={e => setCurrentPageRequerido(parseInt(e.target.value))}
+                    value={currentPartsRequeridoPage}
+                    onChange={e => setCurrentPartsRequeridoPage(parseInt(e.target.value))}
                     className="px-3 py-1 bg-white border border-blue-300 rounded-lg text-gray-900"
                   >
-                    {Array.from({ length: totalPagesRequerido }, (_, i) => (
+                    {Array.from({ length: totalPartsRequeridoPages }, (_, i) => (
                       <option key={i + 1} value={i + 1}>{i + 1}</option>
                     ))}
                   </select>
-                  <span className="text-gray-600">de {totalPagesRequerido}</span>
+                  <span className="text-gray-600">de {totalPartsRequeridoPages}</span>
                 </div>
                 <button
-                  onClick={() => setCurrentPageRequerido(p => Math.min(totalPagesRequerido, p + 1))}
-                  disabled={currentPageRequerido === totalPagesRequerido}
+                  onClick={() => setCurrentPartsRequeridoPage(p => Math.min(totalPartsRequeridoPages, p + 1))}
+                  disabled={currentPartsRequeridoPage === totalPartsRequeridoPages}
                   className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Siguiente
-                  <ChevronRight className="w-4 h-4" />
+                  Siguiente <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             )}
