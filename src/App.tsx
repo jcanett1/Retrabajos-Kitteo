@@ -17,6 +17,7 @@ interface Hallazgo {
   cantidad: number
   usuario: string
   usuario_kitteo?: string
+  no_parte_requerido?: string
   created_at?: string
 }
 
@@ -58,10 +59,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
-  // Modal state
+  // Modal state - No. de Parte (encontrado)
   const [showPartsModal, setShowPartsModal] = useState(false)
   const [modalSearch, setModalSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Modal state - No. de Parte REQUERIDO
+  const [showPartsRequeridoModal, setShowPartsRequeridoModal] = useState(false)
+  const [modalRequeridoSearch, setModalRequeridoSearch] = useState('')
+  const [currentPageRequerido, setCurrentPageRequerido] = useState(1)
 
   // Form state
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -69,6 +75,8 @@ function App() {
   const [hallazgo, setHallazgo] = useState('')
   const [noParte, setNoParte] = useState('')
   const [noParteDisplay, setNoParteDisplay] = useState('')
+  const [noParteRequerido, setNoParteRequerido] = useState('')
+  const [noParteRequeridoDisplay, setNoParteRequeridoDisplay] = useState('')
   const [cantidad, setCantidad] = useState(1)
   const [usuario, setUsuario] = useState('')
   const [usuarioKitteo, setUsuarioKitteo] = useState('')
@@ -102,7 +110,6 @@ function App() {
 
       if (error) throw error
 
-      // Transform data to match our interface
       const transformedData = data.map(item => ({
         id: item.id,
         fecha: item.fecha,
@@ -113,6 +120,7 @@ function App() {
         cantidad: item.cantidad,
         usuario: item.usuario,
         usuario_kitteo: item.usuario_kitteo,
+        no_parte_requerido: item.no_parte_requerido,
         created_at: item.created_at
       }))
 
@@ -125,77 +133,93 @@ function App() {
     }
   }
 
-  // Filter parts based on search
+  // Filter parts - No. de Parte
   const filteredParts = partsOptions.filter(part =>
     part.id.toLowerCase().includes(modalSearch.toLowerCase()) ||
     part.description.toLowerCase().includes(modalSearch.toLowerCase())
   )
 
-  // Pagination
   const totalPages = Math.ceil(filteredParts.length / ITEMS_PER_PAGE)
   const paginatedParts = filteredParts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   )
 
-  // Reset page when search changes
+  // Filter parts - No. de Parte REQUERIDO
+  const filteredPartsRequerido = partsOptions.filter(part =>
+    part.id.toLowerCase().includes(modalRequeridoSearch.toLowerCase()) ||
+    part.description.toLowerCase().includes(modalRequeridoSearch.toLowerCase())
+  )
+
+  const totalPagesRequerido = Math.ceil(filteredPartsRequerido.length / ITEMS_PER_PAGE)
+  const paginatedPartsRequerido = filteredPartsRequerido.slice(
+    (currentPageRequerido - 1) * ITEMS_PER_PAGE,
+    currentPageRequerido * ITEMS_PER_PAGE
+  )
+
+  // Reset pages when search changes
   useEffect(() => {
     setCurrentPage(1)
   }, [modalSearch])
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+  useEffect(() => {
+    setCurrentPageRequerido(1)
+  }, [modalRequeridoSearch])
 
-  if (!fecha || !noOrden || !hallazgo || !noParte || !cantidad || !usuario || !usuarioKitteo) {
-    showNotification('error', 'Por favor complete todos los campos')
-    return
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-  try {
-    setLoading(true)
-
-    // Insert into Supabase - CORREGIDO: removí el parámetro columns de la URL
-    const { data, error } = await supabase
-      .from('hallazgoskitteo')
-      .insert([
-        {
-          fecha,
-          area: 'KITTEO',
-          no_orden: noOrden,
-          hallazgo,
-          no_parte: noParte,
-          cantidad,
-          usuario,
-          usuario_kitteo: usuarioKitteo
-        }
-      ])
-      .select()
-
-    if (error) {
-      console.error('Supabase error:', error)
-      throw error
+    if (!fecha || !noOrden || !hallazgo || !noParte || !noParteRequerido || !cantidad || !usuario || !usuarioKitteo) {
+      showNotification('error', 'Por favor complete todos los campos')
+      return
     }
 
-    showNotification('success', 'Hallazgo registrado exitosamente')
+    try {
+      setLoading(true)
 
-    // Reload records
-    await loadRegistros()
+      const { data, error } = await supabase
+        .from('hallazgoskitteo')
+        .insert([
+          {
+            fecha,
+            area: 'KITTEO',
+            no_orden: noOrden,
+            hallazgo,
+            no_parte: noParte,
+            no_parte_requerido: noParteRequerido,
+            cantidad,
+            usuario,
+            usuario_kitteo: usuarioKitteo
+          }
+        ])
+        .select()
 
-    // Reset form
-    setNoOrden('')
-    setHallazgo('')
-    setNoParte('')
-    setNoParteDisplay('')
-    setCantidad(1)
-    setUsuario('')
-    setUsuarioKitteo('')
-  } catch (error) {
-    console.error('Error saving record:', error)
-    showNotification('error', 'Error al guardar el registro')
-  } finally {
-    setLoading(false)
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+
+      showNotification('success', 'Hallazgo registrado exitosamente')
+
+      await loadRegistros()
+
+      // Reset form
+      setNoOrden('')
+      setHallazgo('')
+      setNoParte('')
+      setNoParteDisplay('')
+      setNoParteRequerido('')
+      setNoParteRequeridoDisplay('')
+      setCantidad(1)
+      setUsuario('')
+      setUsuarioKitteo('')
+    } catch (error) {
+      console.error('Error saving record:', error)
+      showNotification('error', 'Error al guardar el registro')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   const handleSelectPart = (part: PartOption) => {
     setNoParte(part.id)
@@ -204,8 +228,15 @@ const handleSubmit = async (e: React.FormEvent) => {
     setModalSearch('')
   }
 
+  const handleSelectPartRequerido = (part: PartOption) => {
+    setNoParteRequerido(part.id)
+    setNoParteRequeridoDisplay(`${part.id} - ${part.description}`)
+    setShowPartsRequeridoModal(false)
+    setModalRequeridoSearch('')
+  }
+
   const exportToCSV = () => {
-    const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'Cantidad', 'Usuario', 'Usuario Kitteo']
+    const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
     const csvContent = [
       headers.join(','),
       ...registros.map(r => [
@@ -214,6 +245,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         r.noOrden,
         `"${r.hallazgo}"`,
         r.noParte,
+        r.no_parte_requerido || '',
         r.cantidad,
         `"${r.usuario}"`,
         `"${r.usuario_kitteo || ''}"`
@@ -233,7 +265,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       {notification && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 ${
           notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        }`}>
+        } text-white`}>
           {notification.type === 'success' ? (
             <CheckCircle className="w-5 h-5" />
           ) : (
@@ -335,13 +367,31 @@ const handleSubmit = async (e: React.FormEvent) => {
                 onClick={() => setShowPartsModal(true)}
                 className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-left hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:border-transparent flex items-center justify-between text-gray-900"
               >
-                <span className={noParteDisplay ? 'text-gray-900' : 'text-gray-500'}>
+                <span className={noParteDisplay ? 'text-gray-900 truncate' : 'text-gray-500'}>
                   {noParteDisplay || 'Seleccionar número de parte...'}
                 </span>
-                <Search className="w-4 h-4 text-gray-500" />
+                <Search className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
               </button>
               {noParte && (
                 <div className="mt-1 text-sm text-green-600">Seleccionado: {noParte}</div>
+              )}
+            </div>
+
+            {/* No. de Parte REQUERIDO - Opens Modal */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">No. de Parte REQUERIDO *</label>
+              <button
+                type="button"
+                onClick={() => setShowPartsRequeridoModal(true)}
+                className="w-full px-4 py-2 bg-white border border-blue-400 rounded-lg text-left hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900"
+              >
+                <span className={noParteRequeridoDisplay ? 'text-gray-900 truncate' : 'text-gray-500'}>
+                  {noParteRequeridoDisplay || 'Seleccionar parte requerida...'}
+                </span>
+                <Search className="w-4 h-4 text-blue-500 flex-shrink-0 ml-2" />
+              </button>
+              {noParteRequerido && (
+                <div className="mt-1 text-sm text-blue-600">Seleccionado: {noParteRequerido}</div>
               )}
             </div>
 
@@ -410,7 +460,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             {registros.length > 0 && (
               <button
                 onClick={exportToCSV}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Exportar CSV
@@ -434,6 +484,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <th className="px-4 py-3">No. Orden</th>
                     <th className="px-4 py-3">Hallazgo</th>
                     <th className="px-4 py-3">No. de Parte</th>
+                    <th className="px-4 py-3">No. de Parte Requerido</th>
                     <th className="px-4 py-3">Cantidad</th>
                     <th className="px-4 py-3">Usuario</th>
                     <th className="px-4 py-3 rounded-tr-lg">Usuario Kitteo</th>
@@ -454,6 +505,15 @@ const handleSubmit = async (e: React.FormEvent) => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">{registro.noParte}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {registro.no_parte_requerido ? (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm border border-blue-300">
+                            {registro.no_parte_requerido}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center font-medium text-gray-900">{registro.cantidad}</td>
                       <td className="px-4 py-3 text-gray-700">{registro.usuario}</td>
                       <td className="px-4 py-3 text-gray-700">{registro.usuario_kitteo || '-'}</td>
@@ -466,11 +526,10 @@ const handleSubmit = async (e: React.FormEvent) => {
         </div>
       </main>
 
-      {/* Parts Selection Modal */}
+      {/* Modal: No. de Parte */}
       {showPartsModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-xl font-semibold text-gray-800">Seleccionar Número de Parte</h3>
               <button
@@ -483,8 +542,6 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <X className="w-5 h-5 text-gray-600" />
               </button>
             </div>
-
-            {/* Search */}
             <div className="p-4 border-b border-gray-200">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -501,8 +558,6 @@ const handleSubmit = async (e: React.FormEvent) => {
                 Mostrando {paginatedParts.length} de {filteredParts.length} resultados
               </div>
             </div>
-
-            {/* Parts List */}
             <div className="flex-1 overflow-y-auto p-4">
               {paginatedParts.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
@@ -523,8 +578,6 @@ const handleSubmit = async (e: React.FormEvent) => {
                 </div>
               )}
             </div>
-
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="p-4 border-t border-gray-200 flex items-center justify-between">
                 <button
@@ -552,6 +605,95 @@ const handleSubmit = async (e: React.FormEvent) => {
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  Siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: No. de Parte REQUERIDO */}
+      {showPartsRequeridoModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-blue-200 flex justify-between items-center bg-blue-50 rounded-t-xl">
+              <h3 className="text-xl font-semibold text-blue-800">Seleccionar No. de Parte REQUERIDO</h3>
+              <button
+                onClick={() => {
+                  setShowPartsRequeridoModal(false)
+                  setModalRequeridoSearch('')
+                }}
+                className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-blue-600" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-400" />
+                <input
+                  type="text"
+                  value={modalRequeridoSearch}
+                  onChange={e => setModalRequeridoSearch(e.target.value)}
+                  placeholder="Buscar por ID o descripción..."
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg text-gray-900"
+                  autoFocus
+                />
+              </div>
+              <div className="mt-2 text-sm text-gray-600">
+                Mostrando {paginatedPartsRequerido.length} de {filteredPartsRequerido.length} resultados
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {paginatedPartsRequerido.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No se encontraron resultados</p>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {paginatedPartsRequerido.map(part => (
+                    <div
+                      key={part.id}
+                      onClick={() => handleSelectPartRequerido(part)}
+                      className="p-3 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors border border-blue-200 hover:border-blue-400"
+                    >
+                      <div className="font-medium text-blue-800">{part.id}</div>
+                      <div className="text-sm text-blue-600 truncate">{part.description}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {totalPagesRequerido > 1 && (
+              <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+                <button
+                  onClick={() => setCurrentPageRequerido(p => Math.max(1, p - 1))}
+                  disabled={currentPageRequerido === 1}
+                  className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Anterior
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">Página</span>
+                  <select
+                    value={currentPageRequerido}
+                    onChange={e => setCurrentPageRequerido(parseInt(e.target.value))}
+                    className="px-3 py-1 bg-white border border-blue-300 rounded-lg text-gray-900"
+                  >
+                    {Array.from({ length: totalPagesRequerido }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-600">de {totalPagesRequerido}</span>
+                </div>
+                <button
+                  onClick={() => setCurrentPageRequerido(p => Math.min(totalPagesRequerido, p + 1))}
+                  disabled={currentPageRequerido === totalPagesRequerido}
+                  className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   Siguiente
                   <ChevronRight className="w-4 h-4" />
