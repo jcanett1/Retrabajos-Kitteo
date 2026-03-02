@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 import {
   Search, Plus, Download, FileSpreadsheet, X,
   ChevronLeft, ChevronRight, AlertCircle, CheckCircle,
@@ -136,6 +137,9 @@ function App() {
   const [showDashPartsModal, setShowDashPartsModal] = useState(false)
   const [dashModalSearch, setDashModalSearch] = useState('')
   const [currentDashPartsPage, setCurrentDashPartsPage] = useState(1)
+
+  // Dashboard: filtro semana para gráfica de barras
+  const [dashWeekFilter, setDashWeekFilter] = useState<string>('all')
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -278,6 +282,39 @@ function App() {
       .slice(0, 10)
   }, [dashBase])
 
+  // ─── Helper: obtener semana ISO (YYYY-Wxx) de una fecha ─────────────────────
+  const getISOWeek = (dateStr: string): string => {
+    const d = new Date(dateStr + 'T00:00:00')
+    if (isNaN(d.getTime())) return 'Sin fecha'
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+    const dayNum = date.getUTCDay() || 7
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+    const weekNo = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+    return `${date.getUTCFullYear()}-S${String(weekNo).padStart(2, '0')}`
+  }
+
+  // 4. Datos por semana: hallazgos y cantidades agrupados por semana
+  const semanaData = useMemo(() => {
+    const weeks: Record<string, { semana: string; hallazgos: number; cantidad: number }> = {}
+    dashBase.forEach(r => {
+      const semana = getISOWeek(r.fecha)
+      if (!weeks[semana]) weeks[semana] = { semana, hallazgos: 0, cantidad: 0 }
+      weeks[semana].hallazgos += 1
+      weeks[semana].cantidad += r.cantidad || 0
+    })
+    return Object.values(weeks).sort((a, b) => a.semana.localeCompare(b.semana))
+  }, [dashBase])
+
+  // Lista de semanas disponibles para el filtro
+  const semanaOptions = useMemo(() => semanaData.map(s => s.semana), [semanaData])
+
+  // Datos filtrados por semana seleccionada
+  const semanaDataFiltered = useMemo(() => {
+    if (dashWeekFilter === 'all') return semanaData
+    return semanaData.filter(s => s.semana === dashWeekFilter)
+  }, [semanaData, dashWeekFilter])
+
   // ─── Form submit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -319,20 +356,35 @@ function App() {
   }
   const clearDashFilter = () => { setDashFilterNoParte(''); setDashFilterNoParteInput('') }
 
-  const exportToCSV = () => {
-    const headers = ['Fecha', 'Area', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
-    const csvContent = [
-      headers.join(','),
-      ...filteredRegistros.map(r => [
-        r.fecha, r.area, r.noOrden, `"${r.hallazgo}"`, r.noParte,
-        r.no_parte_requerido || '', r.cantidad, `"${r.usuario}"`, `"${r.usuario_kitteo || ''}"`
-      ].join(','))
-    ].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `kitteo_hallazgos_${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
+  const exportToExcel = () => {
+    const headers = ['Fecha', 'Área', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
+    const rows = filteredRegistros.map(r => ({
+      'Fecha': r.fecha,
+      'Área': r.area,
+      'No. Orden': r.noOrden || r.no_orden || '',
+      'Hallazgo': r.hallazgo,
+      'No. de Parte': r.noParte || r.no_parte || '',
+      'No. de Parte Requerido': r.no_parte_requerido || '',
+      'Cantidad': r.cantidad,
+      'Usuario': r.usuario,
+      'Usuario Kitteo': r.usuario_kitteo || ''
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
+    // Ajustar ancho de columnas
+    worksheet['!cols'] = [
+      { wch: 12 }, // Fecha
+      { wch: 10 }, // Área
+      { wch: 14 }, // No. Orden
+      { wch: 30 }, // Hallazgo
+      { wch: 20 }, // No. de Parte
+      { wch: 22 }, // No. de Parte Requerido
+      { wch: 10 }, // Cantidad
+      { wch: 14 }, // Usuario
+      { wch: 16 }, // Usuario Kitteo
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos')
+    XLSX.writeFile(workbook, `kitteo_hallazgos_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -500,9 +552,9 @@ function App() {
                   </span>
                 </h2>
                 {registros.length > 0 && (
-                  <button onClick={exportToCSV}
+                  <button onClick={exportToExcel}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <Download className="w-4 h-4" /> Exportar CSV
+                    <Download className="w-4 h-4" /> Exportar Excel
                   </button>
                 )}
               </div>
@@ -788,6 +840,77 @@ function App() {
                   </ResponsiveContainer>
                 )}
               </div>
+            </div>
+
+            {/* ── Chart 4: Hallazgos y Cantidades por Semana ── */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos y Cantidades por Semana</h3>
+                  <p className="text-sm text-gray-500">Número de hallazgos registrados y cantidad total por semana</p>
+                </div>
+                {/* Filtro por semana */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-600">Filtrar semana:</label>
+                  <select
+                    value={dashWeekFilter}
+                    onChange={e => setDashWeekFilter(e.target.value)}
+                    className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
+                  >
+                    <option value="all">Todas las semanas</option>
+                    {semanaOptions.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {dashWeekFilter !== 'all' && (
+                    <button
+                      onClick={() => setDashWeekFilter('all')}
+                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                      title="Quitar filtro de semana"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {semanaDataFiltered.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(280, semanaDataFiltered.length * 60)}>
+                  <BarChart
+                    data={semanaDataFiltered}
+                    margin={{ top: 10, right: 40, left: 10, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="semana"
+                      tick={{ fontSize: 12 }}
+                      angle={-30}
+                      textAnchor="end"
+                      height={50}
+                    />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [
+                        value,
+                        name === 'hallazgos' ? 'Hallazgos' : 'Cantidad total'
+                      ]}
+                      labelFormatter={(label) => `Semana: ${label}`}
+                    />
+                    <Legend
+                      formatter={(value) => (
+                        <span className="text-sm text-gray-700">
+                          {value === 'hallazgos' ? 'Hallazgos' : 'Cantidad total'}
+                        </span>
+                      )}
+                    />
+                    <Bar dataKey="hallazgos" fill="#6366f1" radius={[4, 4, 0, 0]} name="hallazgos"
+                      label={{ position: 'top', fontSize: 11 }} />
+                    <Bar dataKey="cantidad" fill="#10b981" radius={[4, 4, 0, 0]} name="cantidad"
+                      label={{ position: 'top', fontSize: 11 }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             {/* ── Detail table ── */}
