@@ -249,10 +249,10 @@ function App() {
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
   const hallazgoParteData = useMemo(() => {
-    const counts: Record<string, { hallazgo: string; no_parte: string; count: number }> = {}
+    const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number }> = {}
     dashBase.forEach(r => {
-      const key = `${r.hallazgo}||${r.no_parte}`
-      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, count: 0 }
+      const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
+      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0 }
       counts[key].count += 1
     })
     return Object.values(counts)
@@ -988,7 +988,10 @@ function App() {
                         <span className="text-xl font-extrabold text-indigo-800">{semanaResumen.totalHallazgos}</span>
                       </div>
                       <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                        <span className="text-sm font-medium text-emerald-700">Cantidad total:</span>
+                        <div>
+                          <span className="text-sm font-medium text-emerald-700">Cantidad total:</span>
+                          <p className="text-xs text-emerald-600 mt-0.5">Suma del campo cantidad de cada registro</p>
+                        </div>
                         <span className="text-xl font-extrabold text-emerald-800">{semanaResumen.totalCantidad}</span>
                       </div>
                     </div>
@@ -1007,6 +1010,7 @@ function App() {
                       <th className="px-4 py-3 rounded-tl-lg">#</th>
                       <th className="px-4 py-3">Tipo de Hallazgo</th>
                       <th className="px-4 py-3">No. de Parte</th>
+                      <th className="px-4 py-3">No. de Parte Requerido</th>
                       <th className="px-4 py-3 text-center">Total</th>
                       <th className="px-4 py-3 rounded-tr-lg">Frecuencia</th>
                     </tr>
@@ -1019,6 +1023,11 @@ function App() {
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs border border-yellow-200">{d.hallazgo}</span>
                         </td>
                         <td className="px-4 py-2 font-medium text-gray-800">{d.no_parte}</td>
+                        <td className="px-4 py-2">
+                          {d.no_parte_requerido
+                            ? <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs border border-blue-200">{d.no_parte_requerido}</span>
+                            : <span className="text-gray-400">-</span>}
+                        </td>
                         <td className="px-4 py-2 text-center font-bold text-gray-900">{d.count}</td>
                         <td className="px-4 py-2">
                           <span className="px-2 py-1 rounded text-xs font-semibold text-white"
@@ -1029,7 +1038,7 @@ function App() {
                       </tr>
                     ))}
                     {hallazgoParteData.length === 0 && (
-                      <tr><td colSpan={5} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
+                      <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
                     )}
                   </tbody>
                 </table>
