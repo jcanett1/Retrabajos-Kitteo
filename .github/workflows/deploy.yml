@@ -14,21 +14,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-      
+          node-version: '20'
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm install
-      
-      - name: Ensure Vite is available
-        run: npm install vite @vitejs/plugin-react --no-save
-      
+        run: pnpm install --frozen-lockfile
+
       - name: Build
-        run: npm run build
-      
+        run: pnpm run build
+
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
