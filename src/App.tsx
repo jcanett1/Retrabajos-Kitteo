@@ -334,6 +334,20 @@ function App() {
 
   const hasBarFechaFilter = dashBarFechaDesde || dashBarFechaHasta
 
+  // Resumen total de hallazgos por tipo y cantidad total (para mostrar debajo de la gráfica)
+  const semanaResumen = useMemo(() => {
+    const counts: Record<string, number> = {}
+    let totalCantidad = 0
+    semanaBase.forEach(r => {
+      if (r.hallazgo) counts[r.hallazgo] = (counts[r.hallazgo] || 0) + 1
+      totalCantidad += r.cantidad || 0
+    })
+    const items = Object.entries(counts)
+      .map(([tipo, total]) => ({ tipo, total }))
+      .sort((a, b) => b.total - a.total)
+    return { items, totalCantidad, totalHallazgos: semanaBase.length }
+  }, [semanaBase])
+
   // ─── Form submit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -903,50 +917,83 @@ function App() {
               {semanaData.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
               ) : (
-                <ResponsiveContainer width="100%" height={Math.max(300, semanaData.length * 70)}>
-                  <BarChart
-                    data={semanaData}
-                    margin={{ top: 16, right: 20, left: 10, bottom: 30 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="semana"
-                      tick={{ fontSize: 12 }}
-                      angle={-25}
-                      textAnchor="end"
-                      height={55}
-                    />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      labelFormatter={(label) => `Semana: ${label}`}
-                      formatter={(value: number, name: string) => [
-                        value,
-                        name === 'cantidad' ? 'Cantidad total' : name
-                      ]}
-                    />
-                    <Legend
-                      wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
-                      formatter={(value) => value === 'cantidad' ? 'Cantidad total' : value}
-                    />
-                    {semanaHallazgoTypes.map((tipo, idx) => (
-                      <Bar
-                        key={tipo}
-                        dataKey={tipo}
-                        name={tipo}
-                        fill={PIE_COLORS[idx % PIE_COLORS.length]}
-                        radius={[3, 3, 0, 0]}
-                        stackId="hallazgos"
+                <>
+                  <ResponsiveContainer width="100%" height={Math.max(300, semanaData.length * 70)}>
+                    <BarChart
+                      data={semanaData}
+                      margin={{ top: 16, right: 20, left: 10, bottom: 30 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="semana"
+                        tick={{ fontSize: 12 }}
+                        angle={-25}
+                        textAnchor="end"
+                        height={55}
                       />
-                    ))}
-                    <Bar
-                      dataKey="cantidad"
-                      name="cantidad"
-                      fill="#10b981"
-                      radius={[3, 3, 0, 0]}
-                      label={{ position: 'top', fontSize: 11 }}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        labelFormatter={(label) => `Semana: ${label}`}
+                        formatter={(value: number, name: string) => [
+                          value,
+                          name === 'cantidad' ? 'Cantidad total' : name
+                        ]}
+                      />
+                      <Legend
+                        wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
+                        formatter={(value) => value === 'cantidad' ? 'Cantidad total' : value}
+                      />
+                      {semanaHallazgoTypes.map((tipo, idx) => (
+                        <Bar
+                          key={tipo}
+                          dataKey={tipo}
+                          name={tipo}
+                          fill={PIE_COLORS[idx % PIE_COLORS.length]}
+                          radius={[3, 3, 0, 0]}
+                          stackId="hallazgos"
+                        />
+                      ))}
+                      <Bar
+                        dataKey="cantidad"
+                        name="cantidad"
+                        fill="#10b981"
+                        radius={[3, 3, 0, 0]}
+                        label={{ position: 'top', fontSize: 11 }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  {/* ── Resumen de totales por tipo de hallazgo ── */}
+                  <div className="mt-6 border-t border-gray-100 pt-5">
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {semanaResumen.items.map((item, idx) => (
+                        <div
+                          key={item.tipo}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: PIE_COLORS[semanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] + '60',
+                                   backgroundColor: PIE_COLORS[semanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] + '12' }}
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: PIE_COLORS[semanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] }}
+                          />
+                          <span className="text-gray-700 font-medium">{item.tipo}:</span>
+                          <span className="font-bold text-gray-900">{item.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <span className="text-sm font-medium text-indigo-700">Total hallazgos:</span>
+                        <span className="text-xl font-extrabold text-indigo-800">{semanaResumen.totalHallazgos}</span>
+                      </div>
+                      <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <span className="text-sm font-medium text-emerald-700">Cantidad total:</span>
+                        <span className="text-xl font-extrabold text-emerald-800">{semanaResumen.totalCantidad}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
