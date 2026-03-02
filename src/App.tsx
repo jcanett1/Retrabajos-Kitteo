@@ -138,7 +138,11 @@ function App() {
   const [dashModalSearch, setDashModalSearch] = useState('')
   const [currentDashPartsPage, setCurrentDashPartsPage] = useState(1)
 
-  // Dashboard: filtro por fecha para gráfica de barras por semana
+  // Dashboard: filtro global de fechas (afecta TODAS las gráficas)
+  const [dashFechaDesde, setDashFechaDesde] = useState<string>('')
+  const [dashFechaHasta, setDashFechaHasta] = useState<string>('')
+
+  // Dashboard: filtro por fecha para gráfica de barras por semana (local, ya no se usa separado)
   const [dashBarFechaDesde, setDashBarFechaDesde] = useState<string>('')
   const [dashBarFechaHasta, setDashBarFechaHasta] = useState<string>('')
 
@@ -230,11 +234,18 @@ function App() {
 
   // ─── Dashboard data ───────────────────────────────────────────────────────
 
-  // Base dataset for dashboard (filtered by no_parte if selected)
+  // Base dataset for dashboard (filtered by no_parte + rango de fechas global)
   const dashBase = useMemo(() => {
-    if (!dashFilterNoParte) return registros
-    return registros.filter(r => r.no_parte === dashFilterNoParte)
-  }, [registros, dashFilterNoParte])
+    return registros.filter(r => {
+      if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
+      if (dashFechaDesde && r.fecha < dashFechaDesde) return false
+      if (dashFechaHasta && r.fecha > dashFechaHasta) return false
+      return true
+    })
+  }, [registros, dashFilterNoParte, dashFechaDesde, dashFechaHasta])
+
+  const hasDashFechaFilter = dashFechaDesde || dashFechaHasta
+  const clearDashFechas = () => { setDashFechaDesde(''); setDashFechaHasta('') }
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
   const hallazgoParteData = useMemo(() => {
@@ -296,14 +307,8 @@ function App() {
   }
 
   // 4. Datos por semana: hallazgos por tipo y cantidades agrupados por semana
-  // Primero filtramos dashBase por el rango de fechas de la gráfica
-  const semanaBase = useMemo(() => {
-    return dashBase.filter(r => {
-      if (dashBarFechaDesde && r.fecha < dashBarFechaDesde) return false
-      if (dashBarFechaHasta && r.fecha > dashBarFechaHasta) return false
-      return true
-    })
-  }, [dashBase, dashBarFechaDesde, dashBarFechaHasta])
+  // semanaBase usa dashBase directamente (ya incluye filtro global de fechas y No. de Parte)
+  const semanaBase = useMemo(() => dashBase, [dashBase])
 
   // Obtener todos los tipos de hallazgo presentes en los datos filtrados
   const semanaHallazgoTypes = useMemo(() => {
@@ -695,37 +700,70 @@ function App() {
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Dashboard header + filter */}
+            {/* Dashboard header + filters */}
             <div className="bg-white rounded-xl shadow-xl p-5">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-indigo-700 flex items-center gap-2">
                     <BarChart2 className="w-6 h-6" /> Dashboard de Hallazgos
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {dashFilterNoParte
-                      ? `Mostrando datos para No. de Parte: ${dashFilterNoParte} — ${dashBase.length} registros`
+                    {(dashFilterNoParte || hasDashFechaFilter)
+                      ? `Registros filtrados: ${dashBase.length} de ${registros.length}`
                       : `Total de registros analizados: ${registros.length}`}
                   </p>
                 </div>
-                {/* Filter by No. de Parte */}
-                <div className="flex items-center gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Filtrar por No. de Parte</label>
-                    <button type="button" onClick={() => setShowDashPartsModal(true)}
-                      className="px-4 py-2 bg-white border border-indigo-300 rounded-lg text-left hover:bg-indigo-50 focus:ring-2 focus:ring-indigo-400 flex items-center gap-2 text-gray-900 min-w-[220px]">
-                      <span className={`truncate text-sm ${dashFilterNoParteInput ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {dashFilterNoParteInput || 'Todos los números de parte'}
-                      </span>
-                      <Search className="w-4 h-4 text-indigo-400 flex-shrink-0 ml-auto" />
-                    </button>
+                {/* Filtros del dashboard */}
+                <div className="flex flex-wrap items-end gap-4">
+                  {/* Filtro por rango de fechas global */}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                      <input
+                        type="date"
+                        value={dashFechaDesde}
+                        onChange={e => setDashFechaDesde(e.target.value)}
+                        className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                      <input
+                        type="date"
+                        value={dashFechaHasta}
+                        onChange={e => setDashFechaHasta(e.target.value)}
+                        className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
+                      />
+                    </div>
+                    {hasDashFechaFilter && (
+                      <button
+                        onClick={clearDashFechas}
+                        className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                        title="Limpiar filtro de fechas"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  {dashFilterNoParte && (
-                    <button onClick={clearDashFilter}
-                      className="mt-5 p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors" title="Quitar filtro">
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+                  {/* Filtro por No. de Parte */}
+                  <div className="flex items-end gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Filtrar por No. de Parte</label>
+                      <button type="button" onClick={() => setShowDashPartsModal(true)}
+                        className="px-4 py-2 bg-white border border-indigo-300 rounded-lg text-left hover:bg-indigo-50 focus:ring-2 focus:ring-indigo-400 flex items-center gap-2 text-gray-900 min-w-[220px]">
+                        <span className={`truncate text-sm ${dashFilterNoParteInput ? 'text-gray-900' : 'text-gray-400'}`}>
+                          {dashFilterNoParteInput || 'Todos los números de parte'}
+                        </span>
+                        <Search className="w-4 h-4 text-indigo-400 flex-shrink-0 ml-auto" />
+                      </button>
+                    </div>
+                    {dashFilterNoParte && (
+                      <button onClick={clearDashFilter}
+                        className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors" title="Quitar filtro de parte">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -858,41 +896,9 @@ function App() {
 
             {/* ── Chart 4: Hallazgos por Tipo y Semana ── */}
             <div className="bg-white rounded-xl shadow-xl p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos y Cantidades por Semana</h3>
-                  <p className="text-sm text-gray-500">Tipos de hallazgo y cantidad total agrupados por semana</p>
-                </div>
-                {/* Filtro por rango de fechas */}
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
-                    <input
-                      type="date"
-                      value={dashBarFechaDesde}
-                      onChange={e => setDashBarFechaDesde(e.target.value)}
-                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
-                    <input
-                      type="date"
-                      value={dashBarFechaHasta}
-                      onChange={e => setDashBarFechaHasta(e.target.value)}
-                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
-                    />
-                  </div>
-                  {hasBarFechaFilter && (
-                    <button
-                      onClick={() => { setDashBarFechaDesde(''); setDashBarFechaHasta('') }}
-                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors mb-0.5"
-                      title="Limpiar filtro de fechas"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos y Cantidades por Semana</h3>
+                <p className="text-sm text-gray-500">Tipos de hallazgo y cantidad total agrupados por semana{hasDashFechaFilter ? ` — filtrado por fechas` : ''}</p>
               </div>
               {semanaData.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
