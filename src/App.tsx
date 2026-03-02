@@ -73,10 +73,14 @@ const CustomBarTooltip = ({ active, payload }: any) => {
     const d = payload[0].payload
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm max-w-xs">
-        <p className="font-semibold text-gray-800 mb-1">{d.hallazgo}</p>
-        <p className="text-gray-600">No. Parte: <span className="font-medium text-gray-900">{d.no_parte}</span></p>
-        <p className="text-gray-600">Frecuencia: <span className="font-bold" style={{ color: FREQ_COLORS[d.frecuencia] }}>{d.frecuencia}</span></p>
-        <p className="text-gray-600">Total registros: <span className="font-bold text-gray-900">{d.count}</span></p>
+        <p className="font-semibold text-gray-800 mb-2">{d.hallazgo}</p>
+        <p className="text-gray-600 mb-0.5">No. de Parte: <span className="font-medium text-gray-900">{d.no_parte}</span></p>
+        {d.no_parte_requerido && (
+          <p className="text-gray-600 mb-0.5">No. de Parte Requerido: <span className="font-medium text-blue-700">{d.no_parte_requerido}</span></p>
+        )}
+        <p className="text-gray-600 mb-0.5">Cantidad registrada: <span className="font-bold text-emerald-700">{d.cantidad ?? d.count}</span></p>
+        <p className="text-gray-600 mb-0.5">Frecuencia: <span className="font-bold" style={{ color: FREQ_COLORS[d.frecuencia] }}>{d.frecuencia}</span></p>
+        <p className="text-gray-600">Veces registrado: <span className="font-bold text-gray-900">{d.count}</span></p>
       </div>
     )
   }
@@ -249,11 +253,12 @@ function App() {
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
   const hallazgoParteData = useMemo(() => {
-    const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number }> = {}
+    const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number; cantidad: number }> = {}
     dashBase.forEach(r => {
       const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
-      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0 }
+      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0, cantidad: 0 }
       counts[key].count += 1
+      counts[key].cantidad += r.cantidad || 0
     })
     return Object.values(counts)
       .sort((a, b) => b.count - a.count)
@@ -1011,7 +1016,8 @@ function App() {
                       <th className="px-4 py-3">Tipo de Hallazgo</th>
                       <th className="px-4 py-3">No. de Parte</th>
                       <th className="px-4 py-3">No. de Parte Requerido</th>
-                      <th className="px-4 py-3 text-center">Total</th>
+                      <th className="px-4 py-3 text-center">Veces registrado</th>
+                      <th className="px-4 py-3 text-center">Cantidad</th>
                       <th className="px-4 py-3 rounded-tr-lg">Frecuencia</th>
                     </tr>
                   </thead>
@@ -1029,6 +1035,7 @@ function App() {
                             : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="px-4 py-2 text-center font-bold text-gray-900">{d.count}</td>
+                        <td className="px-4 py-2 text-center font-bold text-emerald-700">{d.cantidad}</td>
                         <td className="px-4 py-2">
                           <span className="px-2 py-1 rounded text-xs font-semibold text-white"
                             style={{ backgroundColor: FREQ_COLORS[d.frecuencia] }}>
@@ -1038,7 +1045,7 @@ function App() {
                       </tr>
                     ))}
                     {hallazgoParteData.length === 0 && (
-                      <tr><td colSpan={6} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
+                      <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
                     )}
                   </tbody>
                 </table>
