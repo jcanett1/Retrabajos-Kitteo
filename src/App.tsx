@@ -138,8 +138,9 @@ function App() {
   const [dashModalSearch, setDashModalSearch] = useState('')
   const [currentDashPartsPage, setCurrentDashPartsPage] = useState(1)
 
-  // Dashboard: filtro semana para gráfica de barras
-  const [dashWeekFilter, setDashWeekFilter] = useState<string>('all')
+  // Dashboard: filtro por fecha para gráfica de barras por semana
+  const [dashBarFechaDesde, setDashBarFechaDesde] = useState<string>('')
+  const [dashBarFechaHasta, setDashBarFechaHasta] = useState<string>('')
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -294,26 +295,39 @@ function App() {
     return `${date.getUTCFullYear()}-S${String(weekNo).padStart(2, '0')}`
   }
 
-  // 4. Datos por semana: hallazgos y cantidades agrupados por semana
+  // 4. Datos por semana: hallazgos por tipo y cantidades agrupados por semana
+  // Primero filtramos dashBase por el rango de fechas de la gráfica
+  const semanaBase = useMemo(() => {
+    return dashBase.filter(r => {
+      if (dashBarFechaDesde && r.fecha < dashBarFechaDesde) return false
+      if (dashBarFechaHasta && r.fecha > dashBarFechaHasta) return false
+      return true
+    })
+  }, [dashBase, dashBarFechaDesde, dashBarFechaHasta])
+
+  // Obtener todos los tipos de hallazgo presentes en los datos filtrados
+  const semanaHallazgoTypes = useMemo(() => {
+    const types = new Set<string>()
+    semanaBase.forEach(r => { if (r.hallazgo) types.add(r.hallazgo) })
+    return Array.from(types).sort()
+  }, [semanaBase])
+
+  // Construir datos agrupados por semana con una clave por tipo de hallazgo
   const semanaData = useMemo(() => {
-    const weeks: Record<string, { semana: string; hallazgos: number; cantidad: number }> = {}
-    dashBase.forEach(r => {
+    const weeks: Record<string, Record<string, number> & { semana: string; cantidad: number }> = {}
+    semanaBase.forEach(r => {
       const semana = getISOWeek(r.fecha)
-      if (!weeks[semana]) weeks[semana] = { semana, hallazgos: 0, cantidad: 0 }
-      weeks[semana].hallazgos += 1
+      if (!weeks[semana]) {
+        weeks[semana] = { semana, cantidad: 0 }
+        semanaHallazgoTypes.forEach(t => { weeks[semana][t] = 0 })
+      }
+      if (r.hallazgo) weeks[semana][r.hallazgo] = (weeks[semana][r.hallazgo] || 0) + 1
       weeks[semana].cantidad += r.cantidad || 0
     })
     return Object.values(weeks).sort((a, b) => a.semana.localeCompare(b.semana))
-  }, [dashBase])
+  }, [semanaBase, semanaHallazgoTypes])
 
-  // Lista de semanas disponibles para el filtro
-  const semanaOptions = useMemo(() => semanaData.map(s => s.semana), [semanaData])
-
-  // Datos filtrados por semana seleccionada
-  const semanaDataFiltered = useMemo(() => {
-    if (dashWeekFilter === 'all') return semanaData
-    return semanaData.filter(s => s.semana === dashWeekFilter)
-  }, [semanaData, dashWeekFilter])
+  const hasBarFechaFilter = dashBarFechaDesde || dashBarFechaHasta
 
   // ─── Form submit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -842,72 +856,89 @@ function App() {
               </div>
             </div>
 
-            {/* ── Chart 4: Hallazgos y Cantidades por Semana ── */}
+            {/* ── Chart 4: Hallazgos por Tipo y Semana ── */}
             <div className="bg-white rounded-xl shadow-xl p-6">
               <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos y Cantidades por Semana</h3>
-                  <p className="text-sm text-gray-500">Número de hallazgos registrados y cantidad total por semana</p>
+                  <p className="text-sm text-gray-500">Tipos de hallazgo y cantidad total agrupados por semana</p>
                 </div>
-                {/* Filtro por semana */}
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-600">Filtrar semana:</label>
-                  <select
-                    value={dashWeekFilter}
-                    onChange={e => setDashWeekFilter(e.target.value)}
-                    className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
-                  >
-                    <option value="all">Todas las semanas</option>
-                    {semanaOptions.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  {dashWeekFilter !== 'all' && (
+                {/* Filtro por rango de fechas */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                    <input
+                      type="date"
+                      value={dashBarFechaDesde}
+                      onChange={e => setDashBarFechaDesde(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                    <input
+                      type="date"
+                      value={dashBarFechaHasta}
+                      onChange={e => setDashBarFechaHasta(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  {hasBarFechaFilter && (
                     <button
-                      onClick={() => setDashWeekFilter('all')}
-                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
-                      title="Quitar filtro de semana"
+                      onClick={() => { setDashBarFechaDesde(''); setDashBarFechaHasta('') }}
+                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors mb-0.5"
+                      title="Limpiar filtro de fechas"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   )}
                 </div>
               </div>
-              {semanaDataFiltered.length === 0 ? (
+              {semanaData.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
               ) : (
-                <ResponsiveContainer width="100%" height={Math.max(280, semanaDataFiltered.length * 60)}>
+                <ResponsiveContainer width="100%" height={Math.max(300, semanaData.length * 70)}>
                   <BarChart
-                    data={semanaDataFiltered}
-                    margin={{ top: 10, right: 40, left: 10, bottom: 20 }}
+                    data={semanaData}
+                    margin={{ top: 16, right: 20, left: 10, bottom: 30 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="semana"
                       tick={{ fontSize: 12 }}
-                      angle={-30}
+                      angle={-25}
                       textAnchor="end"
-                      height={50}
+                      height={55}
                     />
                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                     <Tooltip
+                      labelFormatter={(label) => `Semana: ${label}`}
                       formatter={(value: number, name: string) => [
                         value,
-                        name === 'hallazgos' ? 'Hallazgos' : 'Cantidad total'
+                        name === 'cantidad' ? 'Cantidad total' : name
                       ]}
-                      labelFormatter={(label) => `Semana: ${label}`}
                     />
                     <Legend
-                      formatter={(value) => (
-                        <span className="text-sm text-gray-700">
-                          {value === 'hallazgos' ? 'Hallazgos' : 'Cantidad total'}
-                        </span>
-                      )}
+                      wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
+                      formatter={(value) => value === 'cantidad' ? 'Cantidad total' : value}
                     />
-                    <Bar dataKey="hallazgos" fill="#6366f1" radius={[4, 4, 0, 0]} name="hallazgos"
-                      label={{ position: 'top', fontSize: 11 }} />
-                    <Bar dataKey="cantidad" fill="#10b981" radius={[4, 4, 0, 0]} name="cantidad"
-                      label={{ position: 'top', fontSize: 11 }} />
+                    {semanaHallazgoTypes.map((tipo, idx) => (
+                      <Bar
+                        key={tipo}
+                        dataKey={tipo}
+                        name={tipo}
+                        fill={PIE_COLORS[idx % PIE_COLORS.length]}
+                        radius={[3, 3, 0, 0]}
+                        stackId="hallazgos"
+                      />
+                    ))}
+                    <Bar
+                      dataKey="cantidad"
+                      name="cantidad"
+                      fill="#10b981"
+                      radius={[3, 3, 0, 0]}
+                      label={{ position: 'top', fontSize: 11 }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
