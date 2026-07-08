@@ -376,6 +376,30 @@ function App() {
     return { items, totalCantidad, totalHallazgos: semanaBase.length }
   }, [semanaBase])
 
+  // 5. Hallazgos por Celda
+  const celdaData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashBase.forEach(r => {
+      const c = r.celda || 'SIN CELDA'
+      counts[c] = (counts[c] || 0) + 1
+    })
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [dashBase])
+
+  // 6. Hallazgos por Área
+  const areaData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashBase.forEach(r => {
+      const a = r.area || 'SIN ÁREA'
+      counts[a] = (counts[a] || 0) + 1
+    })
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [dashBase])
+
   // ─── Form submit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1042,6 +1066,89 @@ function App() {
                   </div>
                 </>
               )}
+            </div>
+
+            {/* ── Chart 5 + 6: Celda y Área side by side ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Bar: Hallazgos por Celda */}
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
+                  Celda con mayor registro
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">Número de hallazgos registrados por celda de producción</p>
+                {celdaData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(220, celdaData.length * 52)}>
+                      <BarChart
+                        data={celdaData}
+                        layout="vertical"
+                        margin={{ top: 4, right: 50, left: 20, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 13, fontWeight: 600 }} />
+                        <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
+                          {celdaData.map((_, index) => (
+                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {/* Top celda badge */}
+                    {celdaData[0] && (
+                      <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <span className="text-sm font-medium text-orange-700">Celda con más hallazgos:</span>
+                        <span className="text-2xl font-extrabold text-orange-600">Celda {celdaData[0].name}</span>
+                        <span className="ml-auto text-lg font-bold text-orange-800">{celdaData[0].value} registros</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Bar: Hallazgos por Área */}
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-teal-500"></span>
+                  Hallazgos por Área
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">Áreas donde se están registrando los hallazgos</p>
+                {areaData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(220, areaData.length * 52)}>
+                      <BarChart
+                        data={areaData}
+                        layout="vertical"
+                        margin={{ top: 4, right: 50, left: 20, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+                        <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
+                          {areaData.map((_, index) => (
+                            <Cell key={`area-${index}`} fill={['#14b8a6','#2dd4bf','#5eead4','#99f6e4','#ccfbf1'][index % 5]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {/* Top area badge */}
+                    {areaData[0] && (
+                      <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-teal-50 border border-teal-200 rounded-lg">
+                        <span className="text-sm font-medium text-teal-700">Área con más hallazgos:</span>
+                        <span className="text-2xl font-extrabold text-teal-600">{areaData[0].name}</span>
+                        <span className="ml-auto text-lg font-bold text-teal-800">{areaData[0].value} registros</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* ── Detail table ── */}
