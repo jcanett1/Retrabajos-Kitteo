@@ -27,6 +27,7 @@ interface Hallazgo {
   usuario: string
   usuario_kitteo?: string
   no_parte_requerido?: string
+  celda?: string
   created_at?: string
   noOrden?: string
   noParte?: string
@@ -51,6 +52,21 @@ const HALLAZGO_OPTIONS = [
 const USUARIOS = [
   'OTTON', 'CARMEN', 'KARLA', 'ADRIAN', 'DENISE',
   'ALAN', 'CINTYA', 'ESTRELLA', 'JUAN', 'FAUSTO', 'DIANA'
+]
+
+const AREA_OPTIONS = [
+  'DOCK AUDIT',
+  'KITTEO',
+  'PROCESSO',
+  'PROVEDOR'
+]
+
+const CELDA_OPTIONS = [
+  '10',
+  '11',
+  '15',
+  '16',
+  '6'
 ]
 
 const RECORDS_PER_PAGE = 100
@@ -119,6 +135,7 @@ function App() {
 
   // Form state
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [area, setArea] = useState('KITTEO')
   const [noOrden, setNoOrden] = useState('')
   const [hallazgo, setHallazgo] = useState('')
   const [noParte, setNoParte] = useState('')
@@ -128,6 +145,7 @@ function App() {
   const [cantidad, setCantidad] = useState(1)
   const [usuario, setUsuario] = useState('')
   const [usuarioKitteo, setUsuarioKitteo] = useState('')
+  const [celda, setCelda] = useState('')
 
   // Filter state (listado)
   const [filterFechaDesde, setFilterFechaDesde] = useState('')
@@ -185,6 +203,7 @@ function App() {
         usuario: item.usuario,
         usuario_kitteo: item.usuario_kitteo,
         no_parte_requerido: item.no_parte_requerido,
+        celda: item.celda,
         created_at: item.created_at
       })))
     } catch (error) {
@@ -356,23 +375,24 @@ function App() {
   // ─── Form submit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!fecha || !noOrden || !hallazgo || !noParte || !noParteRequerido || !cantidad || !usuario || !usuarioKitteo) {
+    if (!fecha || !area || !noOrden || !hallazgo || !noParte || !noParteRequerido || !cantidad || !usuario || !usuarioKitteo || !celda) {
       showNotification('error', 'Por favor complete todos los campos')
       return
     }
     try {
       setLoading(true)
       const { error } = await supabase.from('hallazgoskitteo').insert([{
-        fecha, area: 'KITTEO', no_orden: noOrden, hallazgo,
+        fecha, area, no_orden: noOrden, hallazgo,
         no_parte: noParte, no_parte_requerido: noParteRequerido,
-        cantidad, usuario, usuario_kitteo: usuarioKitteo
+        cantidad, usuario, usuario_kitteo: usuarioKitteo, celda
       }]).select()
       if (error) throw error
       showNotification('success', 'Hallazgo registrado exitosamente')
       await loadRegistros()
       setNoOrden(''); setHallazgo(''); setNoParte(''); setNoParteDisplay('')
       setNoParteRequerido(''); setNoParteRequeridoDisplay('')
-      setCantidad(1); setUsuario(''); setUsuarioKitteo('')
+      setCantidad(1); setUsuario(''); setUsuarioKitteo(''); setCelda('')
+      setArea('KITTEO')
     } catch (error) {
       showNotification('error', 'Error al guardar el registro')
     } finally {
@@ -395,10 +415,11 @@ function App() {
   const clearDashFilter = () => { setDashFilterNoParte(''); setDashFilterNoParteInput('') }
 
   const exportToExcel = () => {
-    const headers = ['Fecha', 'Área', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
     const rows = filteredRegistros.map(r => ({
       'Fecha': r.fecha,
       'Área': r.area,
+      'Celda': r.celda || '',
       'No. Orden': r.noOrden || r.no_orden || '',
       'Hallazgo': r.hallazgo,
       'No. de Parte': r.noParte || r.no_parte || '',
@@ -412,6 +433,7 @@ function App() {
     worksheet['!cols'] = [
       { wch: 12 }, // Fecha
       { wch: 10 }, // Área
+      { wch: 10 }, // Celda
       { wch: 14 }, // No. Orden
       { wch: 30 }, // Hallazgo
       { wch: 20 }, // No. de Parte
@@ -505,9 +527,20 @@ function App() {
                 </div>
                 {/* Area */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
-                  <input type="text" value="KITTEO" disabled
-                    className="w-full px-4 py-2 bg-gray-200 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed font-semibold" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Área *</label>
+                  <select value={area} onChange={e => setArea(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900" required>
+                    {AREA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                {/* Celda */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Celda *</label>
+                  <select value={celda} onChange={e => setCelda(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900" required>
+                    <option value="">Seleccione una celda</option>
+                    {CELDA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
                 </div>
                 {/* No. Orden */}
                 <div>
@@ -649,6 +682,7 @@ function App() {
                         <tr className="bg-gray-200 text-left text-gray-800">
                           <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
                           <th className="px-4 py-3">Área</th>
+                          <th className="px-4 py-3">Celda</th>
                           <th className="px-4 py-3">No. Orden</th>
                           <th className="px-4 py-3">Hallazgo</th>
                           <th className="px-4 py-3">No. de Parte</th>
@@ -663,6 +697,7 @@ function App() {
                           <tr key={r.id} className={`border-b border-gray-200 hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                             <td className="px-4 py-3 text-gray-900">{r.fecha}</td>
                             <td className="px-4 py-3 font-medium text-gray-700">{r.area}</td>
+                            <td className="px-4 py-3 font-medium text-gray-700">{r.celda || '-'}</td>
                             <td className="px-4 py-3 text-gray-900">{r.noOrden}</td>
                             <td className="px-4 py-3">
                               <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm border border-yellow-300">{r.hallazgo}</span>
