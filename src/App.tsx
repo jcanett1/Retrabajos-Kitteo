@@ -50,8 +50,12 @@ const HALLAZGO_OPTIONS = [
 ]
 
 const USUARIOS = [
-  'OTTON', 'CARMEN', 'KARLA', 'ADRIAN', 'DENISE',
-  'ALAN', 'CINTYA', 'ESTRELLA', 'JUAN', 'FAUSTO', 'DIANA'
+  'YODELI',
+  'DENISSE',
+  'YAJAIRA',
+  'DIANA',
+  'KARLA',
+  'CARMEN'
 ]
 
 const AREA_OPTIONS = [
@@ -557,15 +561,15 @@ function App() {
                     {HALLAZGO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 </div>
-                {/* No. de Parte */}
+                {/* No. de Parte EQUIVOCADO */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">No. de Parte *</label>
+                  <label className="block text-sm font-medium text-red-600 mb-1">No. de Parte EQUIVOCADO *</label>
                   <button type="button" onClick={() => setShowPartsModal(true)}
-                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-left hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 flex items-center justify-between text-gray-900">
-                    <span className={`truncate ${noParteDisplay ? 'text-gray-900' : 'text-gray-500'}`}>
+                    className="w-full px-4 py-2 bg-red-50 border-2 border-red-500 rounded-lg text-left hover:bg-red-100 focus:ring-2 focus:ring-red-500 flex items-center justify-between text-gray-900">
+                    <span className={`truncate ${noParteDisplay ? 'text-gray-900' : 'text-red-400'}`}>
                       {noParteDisplay || 'Seleccionar número de parte...'}
                     </span>
-                    <Search className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
+                    <Search className="w-4 h-4 text-red-500 flex-shrink-0 ml-2" />
                   </button>
                   {noParte && <div className="mt-1 text-sm text-green-600">Seleccionado: {noParte}</div>}
                 </div>
