@@ -69,8 +69,6 @@ const USUARIOS = [
 const AREA_OPTIONS = [
   'DOCK AUDIT',
   'KITTEO',
-  'PROCESSO',
-  'PROVEDOR'
 ]
 
 const CELDA_OPTIONS = [
