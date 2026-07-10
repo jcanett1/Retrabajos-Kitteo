@@ -28,6 +28,7 @@ interface Hallazgo {
   usuario_kitteo?: string
   no_parte_requerido?: string
   celda?: string
+  nota?: string
   created_at?: string
   noOrden?: string
   noParte?: string
@@ -156,6 +157,7 @@ function App() {
   const [usuario, setUsuario] = useState('')
   const [usuarioKitteo, setUsuarioKitteo] = useState('')
   const [celda, setCelda] = useState('')
+  const [nota, setNota] = useState('')
 
   // Filter state (listado)
   const [filterFechaDesde, setFilterFechaDesde] = useState('')
@@ -214,6 +216,7 @@ function App() {
         usuario_kitteo: item.usuario_kitteo,
         no_parte_requerido: item.no_parte_requerido,
         celda: item.celda,
+        nota: item.nota,
         created_at: item.created_at
       })))
     } catch (error) {
@@ -418,7 +421,8 @@ function App() {
       const { error } = await supabase.from('hallazgoskitteo').insert([{
         fecha, area, no_orden: noOrden, hallazgo,
         no_parte: noParte, no_parte_requerido: noParteRequerido,
-        cantidad, usuario, usuario_kitteo: usuarioKitteo, celda
+        cantidad, usuario, usuario_kitteo: usuarioKitteo, celda,
+        nota: nota || null
       }]).select()
       if (error) throw error
       showNotification('success', 'Hallazgo registrado exitosamente')
@@ -426,7 +430,7 @@ function App() {
       setNoOrden(''); setHallazgo(''); setNoParte(''); setNoParteDisplay('')
       setNoParteRequerido(''); setNoParteRequeridoDisplay('')
       setCantidad(1); setUsuario(''); setUsuarioKitteo(''); setCelda('')
-      setArea('KITTEO')
+      setNota(''); setArea('KITTEO')
     } catch (error) {
       showNotification('error', 'Error al guardar el registro')
     } finally {
@@ -449,7 +453,7 @@ function App() {
   const clearDashFilter = () => { setDashFilterNoParte(''); setDashFilterNoParteInput('') }
 
   const exportToExcel = () => {
-    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo']
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Nota']
     const rows = filteredRegistros.map(r => ({
       'Fecha': r.fecha,
       'Área': r.area,
@@ -460,7 +464,8 @@ function App() {
       'No. de Parte Requerido': r.no_parte_requerido || '',
       'Cantidad': r.cantidad,
       'Usuario': r.usuario,
-      'Usuario Kitteo': r.usuario_kitteo || ''
+      'Usuario Kitteo': r.usuario_kitteo || '',
+      'Nota': r.nota || ''
     }))
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
     // Ajustar ancho de columnas
@@ -475,6 +480,7 @@ function App() {
       { wch: 10 }, // Cantidad
       { wch: 14 }, // Usuario
       { wch: 16 }, // Usuario Kitteo
+      { wch: 30 }, // Nota
     ]
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos')
@@ -636,6 +642,17 @@ function App() {
                   <input type="text" value={usuarioKitteo} onChange={e => setUsuarioKitteo(e.target.value.toUpperCase())} placeholder="Nombre o iniciales"
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900" required />
                 </div>
+                {/* Nota */}
+                <div className="md:col-span-2 lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nota <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <textarea
+                    value={nota}
+                    onChange={e => setNota(e.target.value)}
+                    placeholder="Escribe una nota adicional..."
+                    rows={2}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900 resize-none"
+                  />
+                </div>
                 {/* Submit */}
                 <div className="flex items-end">
                   <button type="submit" disabled={loading}
@@ -723,7 +740,8 @@ function App() {
                           <th className="px-4 py-3">No. de Parte Requerido</th>
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Usuario</th>
-                          <th className="px-4 py-3 rounded-tr-lg">Usuario Kitteo</th>
+                          <th className="px-4 py-3">Usuario Kitteo</th>
+                          <th className="px-4 py-3 rounded-tr-lg">Nota</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -745,6 +763,11 @@ function App() {
                             <td className="px-4 py-3 text-center font-medium text-gray-900">{r.cantidad}</td>
                             <td className="px-4 py-3 text-gray-700">{r.usuario}</td>
                             <td className="px-4 py-3 text-gray-700">{r.usuario_kitteo || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                              {r.nota
+                                ? <span className="px-2 py-1 bg-amber-50 text-amber-800 rounded border border-amber-200 whitespace-pre-wrap">{r.nota}</span>
+                                : <span className="text-gray-400">-</span>}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
