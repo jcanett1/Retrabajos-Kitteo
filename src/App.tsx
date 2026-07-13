@@ -77,7 +77,8 @@ const CELDA_OPTIONS = [
   '11',
   '15',
   '16',
-  '6'
+  '6',
+  'Prep Area'
 ]
 
 const RECORDS_PER_PAGE = 100
