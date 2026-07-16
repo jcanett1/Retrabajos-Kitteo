@@ -132,7 +132,7 @@ const CustomPieTooltip = ({ active, payload }: any) => {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'registros' | 'dashboard' | 'interno'>('registros')
+  const [activeTab, setActiveTab] = useState<'registros' | 'dashboard' | 'interno' | 'dashInterno'>('registros')
   const [partsOptions, setPartsOptions] = useState<PartOption[]>([])
   const [registros, setRegistros] = useState<Hallazgo[]>([])
   const [loading, setLoading] = useState(false)
@@ -213,6 +213,10 @@ function App() {
   // Dashboard: filtro por fecha para gráfica de barras por semana (local, ya no se usa separado)
   const [dashBarFechaDesde, setDashBarFechaDesde] = useState<string>('')
   const [dashBarFechaHasta, setDashBarFechaHasta] = useState<string>('')
+
+  // ── Estado Dashboard INTERNO ──────────────────────────────────────────────
+  const [dashInternoFechaDesde, setDashInternoFechaDesde] = useState<string>('')
+  const [dashInternoFechaHasta, setDashInternoFechaHasta] = useState<string>('')
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -565,6 +569,107 @@ function App() {
   }, [dashBase])
 
   // ─── Form submit ──────────────────────────────────────────────────────────
+
+  // ─── Dashboard INTERNO data ───────────────────────────────────────────────
+  const hasDashInternoFechaFilter = dashInternoFechaDesde || dashInternoFechaHasta
+  const clearDashInternoFechas = () => { setDashInternoFechaDesde(''); setDashInternoFechaHasta('') }
+
+  const dashInternoBase = useMemo(() => {
+    return registrosInterno.filter(r => {
+      if (dashInternoFechaDesde && r.fecha < dashInternoFechaDesde) return false
+      if (dashInternoFechaHasta && r.fecha > dashInternoFechaHasta) return false
+      return true
+    })
+  }, [registrosInterno, dashInternoFechaDesde, dashInternoFechaHasta])
+
+  const internoHallazgoParteData = useMemo(() => {
+    const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number; cantidad: number }> = {}
+    dashInternoBase.forEach(r => {
+      const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
+      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0, cantidad: 0 }
+      counts[key].count += 1
+      counts[key].cantidad += r.cantidad || 0
+    })
+    return Object.values(counts)
+      .sort((a, b) => b.count - a.count)
+      .map(d => ({
+        ...d,
+        label: `${d.hallazgo}\n(${d.no_parte})`,
+        shortLabel: d.no_parte,
+        frecuencia: d.count <= 2 ? '1-2 veces' : d.count <= 5 ? '2-5 veces' : 'Más de 5 veces'
+      }))
+  }, [dashInternoBase])
+
+  const internoFreqSummary = useMemo(() => {
+    const groups: Record<string, number> = { '1-2 veces': 0, '2-5 veces': 0, 'Más de 5 veces': 0 }
+    internoHallazgoParteData.forEach(d => { groups[d.frecuencia] += 1 })
+    return groups
+  }, [internoHallazgoParteData])
+
+  const internoHallazgoDistData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashInternoBase.forEach(r => { counts[r.hallazgo] = (counts[r.hallazgo] || 0) + 1 })
+    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [dashInternoBase])
+
+  const internoUsuarioKitteoData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashInternoBase.forEach(r => {
+      const uk = r.usuario_kitteo || 'SIN ASIGNAR'
+      counts[uk] = (counts[uk] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashInternoBase])
+
+  const internoSemanaHallazgoTypes = useMemo(() => {
+    const types = new Set<string>()
+    dashInternoBase.forEach(r => { if (r.hallazgo) types.add(r.hallazgo) })
+    return Array.from(types).sort()
+  }, [dashInternoBase])
+
+  const internoSemanaData = useMemo(() => {
+    const weeks: Record<string, Record<string, number> & { semana: string; cantidad: number }> = {}
+    dashInternoBase.forEach(r => {
+      const semana = getISOWeek(r.fecha)
+      if (!weeks[semana]) {
+        weeks[semana] = { semana, cantidad: 0 }
+        internoSemanaHallazgoTypes.forEach(t => { weeks[semana][t] = 0 })
+      }
+      if (r.hallazgo) weeks[semana][r.hallazgo] = (weeks[semana][r.hallazgo] || 0) + 1
+      weeks[semana].cantidad += r.cantidad || 0
+    })
+    return Object.values(weeks).sort((a, b) => a.semana.localeCompare(b.semana))
+  }, [dashInternoBase, internoSemanaHallazgoTypes])
+
+  const internoSemanaResumen = useMemo(() => {
+    const counts: Record<string, number> = {}
+    let totalCantidad = 0
+    dashInternoBase.forEach(r => {
+      if (r.hallazgo) counts[r.hallazgo] = (counts[r.hallazgo] || 0) + 1
+      totalCantidad += r.cantidad || 0
+    })
+    const items = Object.entries(counts).map(([tipo, total]) => ({ tipo, total })).sort((a, b) => b.total - a.total)
+    return { items, totalCantidad, totalHallazgos: dashInternoBase.length }
+  }, [dashInternoBase])
+
+  const internoCeldaData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashInternoBase.forEach(r => {
+      const c = r.celda || 'SIN CELDA'
+      counts[c] = (counts[c] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [dashInternoBase])
+
+  const internoAreaData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    dashInternoBase.forEach(r => {
+      const a = r.area || 'SIN ÁREA'
+      counts[a] = (counts[a] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [dashInternoBase])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fecha || !area || !noOrden || !hallazgo || !noParte || !noParteRequerido || !cantidad || !usuario || !usuarioKitteo || !celda) {
@@ -711,6 +816,17 @@ function App() {
           >
             <ShieldAlert className="w-5 h-5" />
             Hallazgo INTERNO
+          </button>
+          <button
+            onClick={() => setActiveTab('dashInterno')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === 'dashInterno'
+                ? 'bg-rose-700 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <BarChart2 className="w-5 h-5" />
+            Dashboard INTERNO
           </button>
         </div>
 
@@ -1649,6 +1765,307 @@ function App() {
           </>
         )}
       </main>
+
+
+        {/* ════════════════════════════════════════════════════════════════
+            TAB: DASHBOARD INTERNO
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'dashInterno' && (
+          <div className="space-y-6">
+            {/* Header + filtros */}
+            <div className="bg-white rounded-xl shadow-xl p-5 border-l-4 border-rose-600">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-rose-700 flex items-center gap-2">
+                    <BarChart2 className="w-6 h-6" /> Dashboard de Hallazgos INTERNOS
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {hasDashInternoFechaFilter
+                      ? `Registros filtrados: ${dashInternoBase.length} de ${registrosInterno.length}`
+                      : `Total de registros analizados: ${registrosInterno.length}`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                    <input type="date" value={dashInternoFechaDesde} onChange={e => setDashInternoFechaDesde(e.target.value)}
+                      className="px-3 py-2 bg-white border border-rose-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                    <input type="date" value={dashInternoFechaHasta} onChange={e => setDashInternoFechaHasta(e.target.value)}
+                      className="px-3 py-2 bg-white border border-rose-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                  </div>
+                  {hasDashInternoFechaFilter && (
+                    <button onClick={clearDashInternoFechas}
+                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors" title="Limpiar filtro de fechas">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {Object.entries(internoFreqSummary).map(([label, count]) => (
+                <div key={label} className="bg-white rounded-xl shadow p-5 flex items-center gap-4 border-l-4"
+                  style={{ borderColor: FREQ_COLORS[label] }}>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500">Combinaciones con frecuencia</p>
+                    <p className="text-lg font-bold" style={{ color: FREQ_COLORS[label] }}>{label}</p>
+                  </div>
+                  <div className="text-4xl font-extrabold" style={{ color: FREQ_COLORS[label] }}>{count}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Chart 1: Hallazgo + No. de Parte por frecuencia */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos más comunes por No. de Parte (INTERNO)</h3>
+              <p className="text-sm text-gray-500 mb-4">Combinación de tipo de hallazgo y número de parte — color indica frecuencia</p>
+              {internoHallazgoParteData.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(300, internoHallazgoParteData.length * 38)}>
+                  <BarChart data={internoHallazgoParteData} layout="vertical" margin={{ top: 4, right: 40, left: 10, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <YAxis type="category" dataKey="shortLabel" width={110} tick={{ fontSize: 11 }}
+                      tickFormatter={(_v, i) => { const d = internoHallazgoParteData[i]; return d ? `${d.no_parte}` : _v }} />
+                    <Tooltip content={<CustomBarTooltip />} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 12 }}>
+                      {internoHallazgoParteData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={FREQ_COLORS[entry.frecuencia]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              <div className="flex flex-wrap gap-4 mt-4 justify-center">
+                {Object.entries(FREQ_COLORS).map(([label, color]) => (
+                  <div key={label} className="flex items-center gap-2 text-sm">
+                    <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
+                    <span className="text-gray-600">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chart 2 + 3 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Distribución por tipo de hallazgo (INTERNO)</h3>
+                <p className="text-sm text-gray-500 mb-4">Proporción de cada tipo de hallazgo</p>
+                {internoHallazgoDistData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <PieChart>
+                      <Pie data={internoHallazgoDistData} cx="50%" cy="45%" outerRadius={110} dataKey="value"
+                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                        {internoHallazgoDistData.map((_, index) => (
+                          <Cell key={`pie-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomPieTooltip />} />
+                      <Legend formatter={(value) => <span className="text-xs text-gray-700">{value}</span>} wrapperStyle={{ fontSize: '11px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios de Kitteo (INTERNO)</h3>
+                <p className="text-sm text-gray-500 mb-4">Usuarios con más hallazgos internos registrados</p>
+                {internoUsuarioKitteoData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={internoUsuarioKitteoData} layout="vertical" margin={{ top: 4, right: 40, left: 10, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
+                      <Tooltip formatter={(value) => [`${value} registros`, 'Total']} />
+                      <Bar dataKey="value" fill="#e11d48" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 12 }}>
+                        {internoUsuarioKitteoData.map((_, index) => (
+                          <Cell key={`uk-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Chart 4: Por semana */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">Hallazgos y Cantidades por Semana (INTERNO)</h3>
+              <p className="text-sm text-gray-500 mb-4">Tipos de hallazgo y cantidad total agrupados por semana</p>
+              {internoSemanaData.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={Math.max(300, internoSemanaData.length * 70)}>
+                    <BarChart data={internoSemanaData} margin={{ top: 16, right: 20, left: 10, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="semana" tick={{ fontSize: 12 }} angle={-25} textAnchor="end" height={55} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <Tooltip labelFormatter={(label) => `Semana: ${label}`}
+                        formatter={(value: number, name: string) => [value, name === 'cantidad' ? 'Cantidad total' : name]} />
+                      <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
+                        formatter={(value) => value === 'cantidad' ? 'Cantidad total' : value} />
+                      {internoSemanaHallazgoTypes.map((tipo, idx) => (
+                        <Bar key={tipo} dataKey={tipo} name={tipo} fill={PIE_COLORS[idx % PIE_COLORS.length]} radius={[3, 3, 0, 0]} stackId="hallazgos" />
+                      ))}
+                      <Bar dataKey="cantidad" name="cantidad" fill="#10b981" radius={[3, 3, 0, 0]} label={{ position: 'top', fontSize: 11 }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="mt-6 border-t border-gray-100 pt-5">
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {internoSemanaResumen.items.map((item) => (
+                        <div key={item.tipo} className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: PIE_COLORS[internoSemanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] + '60',
+                                   backgroundColor: PIE_COLORS[internoSemanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] + '12' }}>
+                          <span className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: PIE_COLORS[internoSemanaHallazgoTypes.indexOf(item.tipo) % PIE_COLORS.length] }} />
+                          <span className="text-gray-700 font-medium">{item.tipo}:</span>
+                          <span className="font-bold text-gray-900">{item.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-3 px-4 py-3 bg-rose-50 border border-rose-200 rounded-lg">
+                        <span className="text-sm font-medium text-rose-700">Total hallazgos:</span>
+                        <span className="text-xl font-extrabold text-rose-800">{internoSemanaResumen.totalHallazgos}</span>
+                      </div>
+                      <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <span className="text-sm font-medium text-emerald-700">Cantidad total:</span>
+                        <span className="text-xl font-extrabold text-emerald-800">{internoSemanaResumen.totalCantidad}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Chart 5 + 6: Celda y Área */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
+                  Celda con mayor registro (INTERNO)
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">Número de hallazgos internos por celda</p>
+                {internoCeldaData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(220, internoCeldaData.length * 52)}>
+                      <BarChart data={internoCeldaData} layout="vertical" margin={{ top: 4, right: 50, left: 20, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 13, fontWeight: 600 }} />
+                        <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
+                          {internoCeldaData.map((_, index) => (
+                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {internoCeldaData[0] && (
+                      <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <span className="text-sm font-medium text-orange-700">Celda con más hallazgos:</span>
+                        <span className="text-2xl font-extrabold text-orange-600">Celda {internoCeldaData[0].name}</span>
+                        <span className="ml-auto text-lg font-bold text-orange-800">{internoCeldaData[0].value} registros</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="bg-white rounded-xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-teal-500"></span>
+                  Hallazgos por Área (INTERNO)
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">Áreas con hallazgos internos registrados</p>
+                {internoAreaData.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={Math.max(220, internoAreaData.length * 52)}>
+                      <BarChart data={internoAreaData} layout="vertical" margin={{ top: 4, right: 50, left: 20, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+                        <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
+                        <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
+                          {internoAreaData.map((_, index) => (
+                            <Cell key={`area-${index}`} fill={['#14b8a6','#2dd4bf','#5eead4','#99f6e4','#ccfbf1'][index % 5]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {internoAreaData[0] && (
+                      <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-teal-50 border border-teal-200 rounded-lg">
+                        <span className="text-sm font-medium text-teal-700">Área con más hallazgos:</span>
+                        <span className="text-2xl font-extrabold text-teal-600">{internoAreaData[0].name}</span>
+                        <span className="ml-auto text-lg font-bold text-teal-800">{internoAreaData[0].value} registros</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Detail table */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Detalle: Hallazgo + No. de Parte (INTERNO)</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-rose-100 text-left text-gray-700">
+                      <th className="px-4 py-3 rounded-tl-lg">#</th>
+                      <th className="px-4 py-3">Tipo de Hallazgo</th>
+                      <th className="px-4 py-3">No. de Parte</th>
+                      <th className="px-4 py-3">No. de Parte Requerido</th>
+                      <th className="px-4 py-3 text-center">Veces registrado</th>
+                      <th className="px-4 py-3 text-center">Cantidad</th>
+                      <th className="px-4 py-3 rounded-tr-lg">Frecuencia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {internoHallazgoParteData.map((d, idx) => (
+                      <tr key={idx} className={`border-b border-gray-100 hover:bg-rose-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <td className="px-4 py-2 text-gray-500">{idx + 1}</td>
+                        <td className="px-4 py-2">
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs border border-orange-200">{d.hallazgo}</span>
+                        </td>
+                        <td className="px-4 py-2 font-medium text-gray-800">{d.no_parte}</td>
+                        <td className="px-4 py-2">
+                          {d.no_parte_requerido
+                            ? <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs border border-blue-200">{d.no_parte_requerido}</span>
+                            : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="px-4 py-2 text-center font-bold text-gray-900">{d.count}</td>
+                        <td className="px-4 py-2 text-center font-bold text-emerald-700">{d.cantidad}</td>
+                        <td className="px-4 py-2">
+                          <span className="px-2 py-1 rounded text-xs font-semibold text-white"
+                            style={{ backgroundColor: FREQ_COLORS[d.frecuencia] }}>
+                            {d.frecuencia}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {internoHallazgoParteData.length === 0 && (
+                      <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* ── Modal: No. de Parte INTERNO ── */}
       {showInternoPartsModal && (
