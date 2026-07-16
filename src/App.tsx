@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import {
   Search, Plus, Download, FileSpreadsheet, X,
   ChevronLeft, ChevronRight, AlertCircle, CheckCircle,
-  Filter, BarChart2, ClipboardList
+  Filter, BarChart2, ClipboardList, ShieldAlert
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -132,7 +132,7 @@ const CustomPieTooltip = ({ active, payload }: any) => {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'registros' | 'dashboard'>('registros')
+  const [activeTab, setActiveTab] = useState<'registros' | 'dashboard' | 'interno'>('registros')
   const [partsOptions, setPartsOptions] = useState<PartOption[]>([])
   const [registros, setRegistros] = useState<Hallazgo[]>([])
   const [loading, setLoading] = useState(false)
@@ -169,6 +169,36 @@ function App() {
   const [filterUsuario, setFilterUsuario] = useState('')
   const [recordsPage, setRecordsPage] = useState(1)
 
+  // ── Estado formulario INTERNO ──────────────────────────────────────────────
+  const [internoFecha, setInternoFecha] = useState(new Date().toISOString().split('T')[0])
+  const [internoArea, setInternoArea] = useState('KITTEO')
+  const [internoCelda, setInternoCelda] = useState('')
+  const [internoNoOrden, setInternoNoOrden] = useState('')
+  const [internoHallazgo, setInternoHallazgo] = useState('')
+  const [internoNoParte, setInternoNoParte] = useState('')
+  const [internoNoParteDisplay, setInternoNoParteDisplay] = useState('')
+  const [internoNoParteRequerido, setInternoNoParteRequerido] = useState('')
+  const [internoNoParteRequeridoDisplay, setInternoNoParteRequeridoDisplay] = useState('')
+  const [internoCantidad, setInternoCantidad] = useState(1)
+  const [internoUsuario, setInternoUsuario] = useState('')
+  const [internoUsuarioKitteo, setInternoUsuarioKitteo] = useState('')
+  const [internoNota, setInternoNota] = useState('')
+
+  // Modal partes INTERNO
+  const [showInternoPartsModal, setShowInternoPartsModal] = useState(false)
+  const [internoModalSearch, setInternoModalSearch] = useState('')
+  const [currentInternoPartsPage, setCurrentInternoPartsPage] = useState(1)
+  const [showInternoPartsRequeridoModal, setShowInternoPartsRequeridoModal] = useState(false)
+  const [internoModalRequeridoSearch, setInternoModalRequeridoSearch] = useState('')
+  const [currentInternoPartsRequeridoPage, setCurrentInternoPartsRequeridoPage] = useState(1)
+
+  // Registros INTERNO
+  const [registrosInterno, setRegistrosInterno] = useState<Hallazgo[]>([])
+  const [filterInternoFechaDesde, setFilterInternoFechaDesde] = useState('')
+  const [filterInternoFechaHasta, setFilterInternoFechaHasta] = useState('')
+  const [filterInternoUsuario, setFilterInternoUsuario] = useState('')
+  const [internoRecordsPage, setInternoRecordsPage] = useState(1)
+
   // Dashboard filter state
   const [dashFilterNoParte, setDashFilterNoParte] = useState('')
   const [dashFilterNoParteInput, setDashFilterNoParteInput] = useState('')
@@ -197,6 +227,7 @@ function App() {
   }, [])
 
   useEffect(() => { loadRegistros() }, [])
+  useEffect(() => { loadRegistrosInterno() }, [])
 
   const loadRegistros = async () => {
     try {
@@ -230,6 +261,73 @@ function App() {
     }
   }
 
+  const loadRegistrosInterno = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('hallazgos_interno')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setRegistrosInterno(data.map(item => ({
+        id: item.id,
+        fecha: item.fecha,
+        area: item.area,
+        no_orden: item.no_orden,
+        noOrden: item.no_orden,
+        hallazgo: item.hallazgo,
+        no_parte: item.parte_equivocada,
+        noParte: item.parte_equivocada,
+        cantidad: item.cantidad,
+        usuario: item.usuario_registra,
+        usuario_kitteo: item.usuario_kitteo,
+        no_parte_requerido: item.parte_requerida,
+        celda: item.celda,
+        nota: item.nota,
+        created_at: item.created_at
+      })))
+    } catch (error) {
+      showNotification('error', 'Error al cargar los registros internos')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmitInterno = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!internoFecha || !internoArea || !internoNoOrden || !internoHallazgo || !internoNoParte || !internoNoParteRequerido || !internoCantidad || !internoUsuario || !internoUsuarioKitteo || !internoCelda) {
+      showNotification('error', 'Por favor complete todos los campos')
+      return
+    }
+    try {
+      setLoading(true)
+      const { error } = await supabase.from('hallazgos_interno').insert([{
+        fecha: internoFecha,
+        area: internoArea,
+        celda: internoCelda,
+        no_orden: internoNoOrden,
+        hallazgo: internoHallazgo,
+        parte_equivocada: internoNoParte,
+        parte_requerida: internoNoParteRequerido,
+        cantidad: internoCantidad,
+        usuario_registra: internoUsuario,
+        usuario_kitteo: internoUsuarioKitteo,
+        nota: internoNota || null
+      }]).select()
+      if (error) throw error
+      showNotification('success', 'Hallazgo INTERNO registrado exitosamente')
+      await loadRegistrosInterno()
+      setInternoNoOrden(''); setInternoHallazgo(''); setInternoNoParte(''); setInternoNoParteDisplay('')
+      setInternoNoParteRequerido(''); setInternoNoParteRequeridoDisplay('')
+      setInternoCantidad(1); setInternoUsuario(''); setInternoUsuarioKitteo(''); setInternoCelda('')
+      setInternoNota(''); setInternoArea('KITTEO')
+    } catch (error) {
+      showNotification('error', 'Error al guardar el registro interno')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ─── Parts modal filtering ────────────────────────────────────────────────
   const filteredParts = partsOptions.filter(p =>
     p.id.toLowerCase().includes(modalSearch.toLowerCase()) ||
@@ -255,6 +353,59 @@ function App() {
   useEffect(() => { setCurrentPartsPage(1) }, [modalSearch])
   useEffect(() => { setCurrentPartsRequeridoPage(1) }, [modalRequeridoSearch])
   useEffect(() => { setCurrentDashPartsPage(1) }, [dashModalSearch])
+
+  // ─── Parts modal INTERNO ─────────────────────────────────────────────────
+  const filteredInternoParts = partsOptions.filter(p =>
+    p.id.toLowerCase().includes(internoModalSearch.toLowerCase()) ||
+    p.description.toLowerCase().includes(internoModalSearch.toLowerCase())
+  )
+  const totalInternoPartsPages = Math.ceil(filteredInternoParts.length / PARTS_PER_PAGE)
+  const paginatedInternoParts = filteredInternoParts.slice((currentInternoPartsPage - 1) * PARTS_PER_PAGE, currentInternoPartsPage * PARTS_PER_PAGE)
+
+  const filteredInternoPartsRequerido = partsOptions.filter(p =>
+    p.id.toLowerCase().includes(internoModalRequeridoSearch.toLowerCase()) ||
+    p.description.toLowerCase().includes(internoModalRequeridoSearch.toLowerCase())
+  )
+  const totalInternoPartsRequeridoPages = Math.ceil(filteredInternoPartsRequerido.length / PARTS_PER_PAGE)
+  const paginatedInternoPartsRequerido = filteredInternoPartsRequerido.slice((currentInternoPartsRequeridoPage - 1) * PARTS_PER_PAGE, currentInternoPartsRequeridoPage * PARTS_PER_PAGE)
+
+  useEffect(() => { setCurrentInternoPartsPage(1) }, [internoModalSearch])
+  useEffect(() => { setCurrentInternoPartsRequeridoPage(1) }, [internoModalRequeridoSearch])
+
+  // ─── Records INTERNO filtering ───────────────────────────────────────────
+  const filteredRegistrosInterno = useMemo(() => registrosInterno.filter(r => {
+    if (filterInternoFechaDesde && r.fecha < filterInternoFechaDesde) return false
+    if (filterInternoFechaHasta && r.fecha > filterInternoFechaHasta) return false
+    if (filterInternoUsuario && r.usuario !== filterInternoUsuario) return false
+    return true
+  }), [registrosInterno, filterInternoFechaDesde, filterInternoFechaHasta, filterInternoUsuario])
+
+  useEffect(() => { setInternoRecordsPage(1) }, [filterInternoFechaDesde, filterInternoFechaHasta, filterInternoUsuario])
+
+  const totalInternoRecordsPages = Math.ceil(filteredRegistrosInterno.length / RECORDS_PER_PAGE)
+  const paginatedRegistrosInterno = filteredRegistrosInterno.slice((internoRecordsPage - 1) * RECORDS_PER_PAGE, internoRecordsPage * RECORDS_PER_PAGE)
+  const hasActiveInternoFilters = filterInternoFechaDesde || filterInternoFechaHasta || filterInternoUsuario
+  const clearInternoFilters = () => { setFilterInternoFechaDesde(''); setFilterInternoFechaHasta(''); setFilterInternoUsuario('') }
+
+  const exportInternoToExcel = () => {
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Nota']
+    const rows = filteredRegistrosInterno.map(r => ({
+      'Fecha': r.fecha, 'Área': r.area, 'Celda': r.celda || '',
+      'No. Orden': r.noOrden || r.no_orden || '', 'Hallazgo': r.hallazgo,
+      'No. de Parte': r.noParte || r.no_parte || '',
+      'No. de Parte Requerido': r.no_parte_requerido || '',
+      'Cantidad': r.cantidad, 'Usuario': r.usuario,
+      'Usuario Kitteo': r.usuario_kitteo || '', 'Nota': r.nota || ''
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 30 },
+      { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 30 }
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos Interno')
+    XLSX.writeFile(workbook, `kitteo_hallazgos_interno_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
 
   // ─── Records filtering ────────────────────────────────────────────────────
   const filteredRegistros = useMemo(() => registros.filter(r => {
@@ -549,6 +700,17 @@ function App() {
           >
             <BarChart2 className="w-5 h-5" />
             Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('interno')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === 'interno'
+                ? 'bg-orange-600 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <ShieldAlert className="w-5 h-5" />
+            Hallazgo INTERNO
           </button>
         </div>
 
@@ -1232,7 +1394,369 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            TAB: HALLAZGO INTERNO
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'interno' && (
+          <>
+            {/* Form INTERNO */}
+            <div className="bg-white rounded-xl shadow-xl p-6 mb-8 border-l-4 border-orange-500">
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2 text-orange-700">
+                <ShieldAlert className="w-5 h-5" /> Registrar Nuevo Hallazgo INTERNO
+              </h2>
+              <form onSubmit={handleSubmitInterno} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Fecha */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
+                  <input type="date" value={internoFecha} onChange={e => setInternoFecha(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
+                </div>
+                {/* Area */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Área *</label>
+                  <select value={internoArea} onChange={e => setInternoArea(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required>
+                    {AREA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                {/* Celda */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Celda *</label>
+                  <select value={internoCelda} onChange={e => setInternoCelda(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required>
+                    <option value="">Seleccione una celda</option>
+                    {CELDA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                {/* No. Orden */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">No. Orden *</label>
+                  <input type="text" value={internoNoOrden} onChange={e => setInternoNoOrden(e.target.value)} placeholder="Número de orden"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
+                </div>
+                {/* Hallazgo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hallazgo *</label>
+                  <select value={internoHallazgo} onChange={e => setInternoHallazgo(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required>
+                    <option value="">Seleccione un hallazgo</option>
+                    {HALLAZGO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                {/* No. de Parte EQUIVOCADO */}
+                <div>
+                  <label className="block text-sm font-medium text-red-600 mb-1">No. de Parte EQUIVOCADO *</label>
+                  <button type="button" onClick={() => setShowInternoPartsModal(true)}
+                    className="w-full px-4 py-2 bg-red-50 border-2 border-red-500 rounded-lg text-left hover:bg-red-100 focus:ring-2 focus:ring-red-500 flex items-center justify-between text-gray-900">
+                    <span className={`truncate ${internoNoParteDisplay ? 'text-gray-900' : 'text-red-400'}`}>
+                      {internoNoParteDisplay || 'Seleccionar número de parte...'}
+                    </span>
+                    <Search className="w-4 h-4 text-red-500 flex-shrink-0 ml-2" />
+                  </button>
+                  {internoNoParte && <div className="mt-1 text-sm text-green-600">Seleccionado: {internoNoParte}</div>}
+                </div>
+                {/* No. de Parte REQUERIDO */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">No. de Parte REQUERIDO *</label>
+                  <button type="button" onClick={() => setShowInternoPartsRequeridoModal(true)}
+                    className="w-full px-4 py-2 bg-white border border-blue-400 rounded-lg text-left hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 flex items-center justify-between text-gray-900">
+                    <span className={`truncate ${internoNoParteRequeridoDisplay ? 'text-gray-900' : 'text-gray-500'}`}>
+                      {internoNoParteRequeridoDisplay || 'Seleccionar parte requerida...'}
+                    </span>
+                    <Search className="w-4 h-4 text-blue-500 flex-shrink-0 ml-2" />
+                  </button>
+                  {internoNoParteRequerido && <div className="mt-1 text-sm text-blue-600">Seleccionado: {internoNoParteRequerido}</div>}
+                </div>
+                {/* Cantidad */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad *</label>
+                  <input type="number" value={internoCantidad} onChange={e => setInternoCantidad(parseInt(e.target.value) || 1)} min="1"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
+                </div>
+                {/* Usuario */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario que Registra *</label>
+                  <select value={internoUsuario} onChange={e => setInternoUsuario(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required>
+                    <option value="">Seleccione un usuario</option>
+                    {USUARIOS.map(usr => <option key={usr} value={usr}>{usr}</option>)}
+                  </select>
+                </div>
+                {/* Usuario Kitteo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario de Kitteo *</label>
+                  <input type="text" value={internoUsuarioKitteo} onChange={e => setInternoUsuarioKitteo(e.target.value.toUpperCase())} placeholder="Nombre o iniciales"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
+                </div>
+                {/* Nota */}
+                <div className="md:col-span-2 lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nota <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <textarea value={internoNota} onChange={e => setInternoNota(e.target.value)}
+                    placeholder="Escribe una nota adicional..." rows={2}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900 resize-none" />
+                </div>
+                {/* Submit */}
+                <div className="flex items-end">
+                  <button type="submit" disabled={loading}
+                    className="w-full px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Plus className="w-5 h-5" /> Registrar Hallazgo INTERNO
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Records list INTERNO */}
+            <div className="bg-white rounded-xl shadow-xl p-6">
+              <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5" />
+                  Registros INTERNOS
+                  <span className="text-sm font-normal text-gray-500">
+                    ({filteredRegistrosInterno.length}{hasActiveInternoFilters ? ` filtrados de ${registrosInterno.length}` : ' total'})
+                  </span>
+                </h2>
+                {registrosInterno.length > 0 && (
+                  <button onClick={exportInternoToExcel}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+                    <Download className="w-4 h-4" /> Exportar Excel
+                  </button>
+                )}
+              </div>
+
+              {/* Filters INTERNO */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Filter className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-semibold text-gray-700">Filtros</span>
+                  {hasActiveInternoFilters && (
+                    <button onClick={clearInternoFilters}
+                      className="ml-auto text-xs px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full flex items-center gap-1">
+                      <X className="w-3 h-3" /> Limpiar filtros
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                    <input type="date" value={filterInternoFechaDesde} onChange={e => setFilterInternoFechaDesde(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                    <input type="date" value={filterInternoFechaHasta} onChange={e => setFilterInternoFechaHasta(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Usuario que registra</label>
+                    <select value={filterInternoUsuario} onChange={e => setFilterInternoUsuario(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900">
+                      <option value="">Todos los usuarios</option>
+                      {USUARIOS.map(usr => <option key={usr} value={usr}>{usr}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {filteredRegistrosInterno.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <ShieldAlert className="w-16 h-16 mx-auto mb-4 opacity-30 text-orange-400" />
+                  {registrosInterno.length === 0 ? (
+                    <><p>No hay registros internos aún</p><p className="text-sm">Los hallazgos internos registrados aparecerán aquí</p></>
+                  ) : (
+                    <><p>No hay registros que coincidan con los filtros</p>
+                      <button onClick={clearInternoFilters} className="mt-2 text-sm text-blue-600 hover:underline">Limpiar filtros</button></>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-orange-100 text-left text-gray-800">
+                          <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
+                          <th className="px-4 py-3">Área</th>
+                          <th className="px-4 py-3">Celda</th>
+                          <th className="px-4 py-3">No. Orden</th>
+                          <th className="px-4 py-3">Hallazgo</th>
+                          <th className="px-4 py-3">No. de Parte</th>
+                          <th className="px-4 py-3">No. de Parte Requerido</th>
+                          <th className="px-4 py-3">Cantidad</th>
+                          <th className="px-4 py-3">Usuario</th>
+                          <th className="px-4 py-3">Usuario Kitteo</th>
+                          <th className="px-4 py-3 rounded-tr-lg">Nota</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedRegistrosInterno.map((r, idx) => (
+                          <tr key={r.id} className={`border-b border-gray-200 hover:bg-orange-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-orange-50/30'}`}>
+                            <td className="px-4 py-3 text-gray-900">{r.fecha}</td>
+                            <td className="px-4 py-3 font-medium text-gray-700">{r.area}</td>
+                            <td className="px-4 py-3 font-medium text-gray-700">{r.celda || '-'}</td>
+                            <td className="px-4 py-3 text-gray-900">{r.noOrden}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-sm border border-orange-300">{r.hallazgo}</span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{r.noParte}</td>
+                            <td className="px-4 py-3 text-sm">
+                              {r.no_parte_requerido
+                                ? <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm border border-blue-300">{r.no_parte_requerido}</span>
+                                : <span className="text-gray-400">-</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center font-medium text-gray-900">{r.cantidad}</td>
+                            <td className="px-4 py-3 text-gray-700">{r.usuario}</td>
+                            <td className="px-4 py-3 text-gray-700">{r.usuario_kitteo || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                              {r.nota
+                                ? <span className="px-2 py-1 bg-amber-50 text-amber-800 rounded border border-amber-200 whitespace-pre-wrap">{r.nota}</span>
+                                : <span className="text-gray-400">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {totalInternoRecordsPages > 1 && (
+                    <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+                      <div className="text-sm text-gray-600">
+                        Mostrando {((internoRecordsPage - 1) * RECORDS_PER_PAGE) + 1}–{Math.min(internoRecordsPage * RECORDS_PER_PAGE, filteredRegistrosInterno.length)} de {filteredRegistrosInterno.length} registros
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setInternoRecordsPage(p => Math.max(1, p - 1))} disabled={internoRecordsPage === 1}
+                          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 flex items-center gap-1 text-sm">
+                          <ChevronLeft className="w-4 h-4" /> Anterior
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-gray-600">Página</span>
+                          <select value={internoRecordsPage} onChange={e => setInternoRecordsPage(parseInt(e.target.value))}
+                            className="px-2 py-1 bg-white border border-gray-300 rounded-lg text-sm text-gray-900">
+                            {Array.from({ length: totalInternoRecordsPages }, (_, i) => (
+                              <option key={i + 1} value={i + 1}>{i + 1}</option>
+                            ))}
+                          </select>
+                          <span className="text-sm text-gray-600">de {totalInternoRecordsPages}</span>
+                        </div>
+                        <button onClick={() => setInternoRecordsPage(p => Math.min(totalInternoRecordsPages, p + 1))} disabled={internoRecordsPage === totalInternoRecordsPages}
+                          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg disabled:opacity-50 flex items-center gap-1 text-sm">
+                          Siguiente <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
       </main>
+
+      {/* ── Modal: No. de Parte INTERNO ── */}
+      {showInternoPartsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-orange-200 flex justify-between items-center bg-orange-50 rounded-t-xl">
+              <h3 className="text-xl font-semibold text-orange-800">Seleccionar Número de Parte (INTERNO)</h3>
+              <button onClick={() => { setShowInternoPartsModal(false); setInternoModalSearch('') }} className="p-2 hover:bg-orange-100 rounded-lg">
+                <X className="w-5 h-5 text-orange-600" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-400" />
+                <input type="text" value={internoModalSearch} onChange={e => setInternoModalSearch(e.target.value)} autoFocus
+                  placeholder="Buscar por ID o descripción..."
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 text-lg text-gray-900" />
+              </div>
+              <div className="mt-2 text-sm text-gray-600">Mostrando {paginatedInternoParts.length} de {filteredInternoParts.length} resultados</div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid gap-2">
+                {paginatedInternoParts.map(part => (
+                  <div key={part.id} onClick={() => { setInternoNoParte(part.id); setInternoNoParteDisplay(`${part.id} - ${part.description}`); setShowInternoPartsModal(false); setInternoModalSearch('') }}
+                    className="p-3 bg-orange-50 hover:bg-orange-100 rounded-lg cursor-pointer border border-orange-200 hover:border-orange-400">
+                    <div className="font-medium text-orange-800">{part.id}</div>
+                    <div className="text-sm text-orange-600 truncate">{part.description}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {totalInternoPartsPages > 1 && (
+              <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+                <button onClick={() => setCurrentInternoPartsPage(p => Math.max(1, p - 1))} disabled={currentInternoPartsPage === 1}
+                  className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg disabled:opacity-50 flex items-center gap-2">
+                  <ChevronLeft className="w-4 h-4" /> Anterior
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">Página</span>
+                  <select value={currentInternoPartsPage} onChange={e => setCurrentInternoPartsPage(parseInt(e.target.value))}
+                    className="px-3 py-1 bg-white border border-orange-300 rounded-lg text-gray-900">
+                    {Array.from({ length: totalInternoPartsPages }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                  </select>
+                  <span className="text-gray-600">de {totalInternoPartsPages}</span>
+                </div>
+                <button onClick={() => setCurrentInternoPartsPage(p => Math.min(totalInternoPartsPages, p + 1))} disabled={currentInternoPartsPage === totalInternoPartsPages}
+                  className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg disabled:opacity-50 flex items-center gap-2">
+                  Siguiente <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: No. de Parte REQUERIDO INTERNO ── */}
+      {showInternoPartsRequeridoModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-blue-200 flex justify-between items-center bg-blue-50 rounded-t-xl">
+              <h3 className="text-xl font-semibold text-blue-800">Seleccionar No. de Parte REQUERIDO (INTERNO)</h3>
+              <button onClick={() => { setShowInternoPartsRequeridoModal(false); setInternoModalRequeridoSearch('') }} className="p-2 hover:bg-blue-100 rounded-lg">
+                <X className="w-5 h-5 text-blue-600" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                <input type="text" value={internoModalRequeridoSearch} onChange={e => setInternoModalRequeridoSearch(e.target.value)} autoFocus
+                  placeholder="Buscar por ID o descripción..."
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg text-gray-900" />
+              </div>
+              <div className="mt-2 text-sm text-gray-600">Mostrando {paginatedInternoPartsRequerido.length} de {filteredInternoPartsRequerido.length} resultados</div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid gap-2">
+                {paginatedInternoPartsRequerido.map(part => (
+                  <div key={part.id} onClick={() => { setInternoNoParteRequerido(part.id); setInternoNoParteRequeridoDisplay(`${part.id} - ${part.description}`); setShowInternoPartsRequeridoModal(false); setInternoModalRequeridoSearch('') }}
+                    className="p-3 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer border border-blue-200 hover:border-blue-400">
+                    <div className="font-medium text-blue-800">{part.id}</div>
+                    <div className="text-sm text-blue-600 truncate">{part.description}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {totalInternoPartsRequeridoPages > 1 && (
+              <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+                <button onClick={() => setCurrentInternoPartsRequeridoPage(p => Math.max(1, p - 1))} disabled={currentInternoPartsRequeridoPage === 1}
+                  className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 flex items-center gap-2">
+                  <ChevronLeft className="w-4 h-4" /> Anterior
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">Página</span>
+                  <select value={currentInternoPartsRequeridoPage} onChange={e => setCurrentInternoPartsRequeridoPage(parseInt(e.target.value))}
+                    className="px-3 py-1 bg-white border border-blue-300 rounded-lg text-gray-900">
+                    {Array.from({ length: totalInternoPartsRequeridoPages }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                  </select>
+                  <span className="text-gray-600">de {totalInternoPartsRequeridoPages}</span>
+                </div>
+                <button onClick={() => setCurrentInternoPartsRequeridoPage(p => Math.min(totalInternoPartsRequeridoPages, p + 1))} disabled={currentInternoPartsRequeridoPage === totalInternoPartsRequeridoPages}
+                  className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg disabled:opacity-50 flex items-center gap-2">
+                  Siguiente <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: No. de Parte ── */}
       {showPartsModal && (
