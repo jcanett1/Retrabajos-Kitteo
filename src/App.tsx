@@ -81,7 +81,8 @@ const CELDA_OPTIONS = [
   '16',
   '6',
   'Prep Area',
-  'JAULA'
+  'JAULA',
+  'N/A'
 ]
 
 const RECORDS_PER_PAGE = 100
