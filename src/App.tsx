@@ -35,27 +35,27 @@ interface Hallazgo {
 }
 
 const HALLAZGO_OPTIONS = [
-  'SHAFT EQUIVOCADO',
-  'CABEZAL EQUIVOCADO',
-  'HOSEL EQUIVOCADO',
-  'GRIP EQUIVOCADO',
-  'SHAFT FALTANTE',
-  'CABEZAL FALTANTE',
-  'GRIP FALTANTE',
-  'HEADCOVER FALTANTE',
-  'SHAFT EXTRA',
-  'GRIP EXTRA',
-  'SIN BANDERA Y SIN SELLO',
-  'SHAFT MEZCLADO SIN ETIQUETA',
-  'SHAFT MEZCLADO CON ETIQUETA',
-  'HEADCOVER EQUIVOCADO',
-  'HOSEL FALTANTE',
-  'REIMPRESION DE PACKING LIST',
-  'TORQUE FALTANTE',
-  'ACCESORIO FALTANTE',
-  'ORDEN ABIERTA',
-  'PATCH EQUIVOCADO',
-  'GRIP EXCEDENTE',
+  '1 - SHAFT EQUIVOCADO',
+  '2 - CABEZAL EQUIVOCADO',
+  '3 - GRIP EQUIVOCADO',
+  '4 - HEADCOVER EQUIVOCADO',
+  '5 - SHAFT FALTANTE',
+  '6 - CABEZAL FALTANTE',
+  '7 - GRIP FALTANTE',
+  '8 - HEADCOVER FALTANTE',
+  '9 - SHAFT EXTRA',
+  '10 - GRIP EXTRA',
+  '11 - SIN BANDERA Y SIN SELLO',
+  '12 - SHAFT MEZCLADO SIN ETIQUETA',
+  '13 - SHAFT MEZCLADO CON ETIQUETA',
+  '14 - HOSEL EQUIVOCADO',
+  '15 - HOSEL FALTANTE',
+  '16 - REIMPRESION DE PACKING LIST',
+  '17 - TORQUE FALTANTE',
+  '18 - ACCESORIO FALTANTE',
+  '19 - ORDEN ABIERTA',
+  '20 - PATCH EQUIVOCADO',
+  '21 - GRIP EXCEDENTE',
   'ACCESORIO EQUIVOCADO',
   'HALLAZGO INTERNO'
 ]
@@ -184,6 +184,7 @@ function App() {
   const [internoUsuario, setInternoUsuario] = useState('')
   const [internoUsuarioKitteo, setInternoUsuarioKitteo] = useState('')
   const [internoNota, setInternoNota] = useState('')
+  const [internoUsuarioValidacion, setInternoUsuarioValidacion] = useState('')
 
   // Modal partes INTERNO
   const [showInternoPartsModal, setShowInternoPartsModal] = useState(false)
@@ -289,7 +290,8 @@ function App() {
         no_parte_requerido: item.parte_requerida,
         celda: item.celda,
         nota: item.nota,
-        created_at: item.created_at
+        created_at: item.created_at,
+        usuario_validacion: item.usuario_validacion
       })))
     } catch (error) {
       showNotification('error', 'Error al cargar los registros internos')
@@ -317,7 +319,8 @@ function App() {
         cantidad: internoCantidad,
         usuario_registra: internoUsuario,
         usuario_kitteo: internoUsuarioKitteo,
-        nota: internoNota || null
+        nota: internoNota || null,
+        usuario_validacion: internoUsuarioValidacion || null
       }]).select()
       if (error) throw error
       showNotification('success', 'Hallazgo INTERNO registrado exitosamente')
@@ -325,7 +328,7 @@ function App() {
       setInternoNoOrden(''); setInternoHallazgo(''); setInternoNoParte(''); setInternoNoParteDisplay('')
       setInternoNoParteRequerido(''); setInternoNoParteRequeridoDisplay('')
       setInternoCantidad(1); setInternoUsuario(''); setInternoUsuarioKitteo(''); setInternoCelda('')
-      setInternoNota(''); setInternoArea('KITTEO')
+      setInternoNota(''); setInternoArea('KITTEO'); setInternoUsuarioValidacion('')
     } catch (error) {
       showNotification('error', 'Error al guardar el registro interno')
     } finally {
@@ -393,19 +396,21 @@ function App() {
   const clearInternoFilters = () => { setFilterInternoFechaDesde(''); setFilterInternoFechaHasta(''); setFilterInternoUsuario('') }
 
   const exportInternoToExcel = () => {
-    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Nota']
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Usuario Validó', 'Nota']
     const rows = filteredRegistrosInterno.map(r => ({
       'Fecha': r.fecha, 'Área': r.area, 'Celda': r.celda || '',
       'No. Orden': r.noOrden || r.no_orden || '', 'Hallazgo': r.hallazgo,
       'No. de Parte': r.noParte || r.no_parte || '',
       'No. de Parte Requerido': r.no_parte_requerido || '',
       'Cantidad': r.cantidad, 'Usuario': r.usuario,
-      'Usuario Kitteo': r.usuario_kitteo || '', 'Nota': r.nota || ''
+      'Usuario Kitteo': r.usuario_kitteo || '',
+      'Usuario Validó': (r as any).usuario_validacion || '',
+      'Nota': r.nota || ''
     }))
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
     worksheet['!cols'] = [
       { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 30 },
-      { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 30 }
+      { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 30 }
     ]
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos Interno')
@@ -1607,11 +1612,17 @@ function App() {
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
                 </div>
                 {/* Nota */}
-                <div className="md:col-span-2 lg:col-span-2">
+                <div className="md:col-span-2 lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nota <span className="text-gray-400 font-normal">(opcional)</span></label>
                   <textarea value={internoNota} onChange={e => setInternoNota(e.target.value)}
                     placeholder="Escribe una nota adicional..." rows={2}
                     className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900 resize-none" />
+                </div>
+                {/* Usuario que Validó */}
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Usuario que Validó <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <input type="text" value={internoUsuarioValidacion} onChange={e => setInternoUsuarioValidacion(e.target.value.toUpperCase())} placeholder="Nombre del validador"
+                    className="w-full px-4 py-2 bg-purple-50 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-400 text-gray-900" />
                 </div>
                 {/* Submit */}
                 <div className="flex items-end">
@@ -1701,6 +1712,7 @@ function App() {
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Usuario</th>
                           <th className="px-4 py-3">Usuario Kitteo</th>
+                          <th className="px-4 py-3">Usuario Validó</th>
                           <th className="px-4 py-3 rounded-tr-lg">Nota</th>
                         </tr>
                       </thead>
@@ -1723,6 +1735,11 @@ function App() {
                             <td className="px-4 py-3 text-center font-medium text-gray-900">{r.cantidad}</td>
                             <td className="px-4 py-3 text-gray-700">{r.usuario}</td>
                             <td className="px-4 py-3 text-gray-700">{r.usuario_kitteo || '-'}</td>
+                            <td className="px-4 py-3">
+                              {(r as any).usuario_validacion
+                                ? <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-sm border border-purple-300">{(r as any).usuario_validacion}</span>
+                                : <span className="text-gray-400">-</span>}
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
                               {r.nota
                                 ? <span className="px-2 py-1 bg-amber-50 text-amber-800 rounded border border-amber-200 whitespace-pre-wrap">{r.nota}</span>
