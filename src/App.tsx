@@ -10,11 +10,8 @@ import {
   ResponsiveContainer, Cell, PieChart, Pie, Legend
 } from 'recharts'
 import { supabase } from './supabaseClient'
-
-interface PartOption {
-  id: string
-  description: string
-}
+import InventoryCatalogDialog from './components/InventoryCatalogDialog'
+import { fetchInventoryCatalog, type PartOption } from './lib/inventoryCatalog'
 
 interface Hallazgo {
   id: string
@@ -143,6 +140,7 @@ const CustomPieTooltip = ({ active, payload }: any) => {
 function App() {
   const [activeTab, setActiveTab] = useState<'registros' | 'dashboard' | 'interno' | 'dashInterno'>('registros')
   const [partsOptions, setPartsOptions] = useState<PartOption[]>([])
+  const [showInventoryCatalogModal, setShowInventoryCatalogModal] = useState(false)
   const [registros, setRegistros] = useState<Hallazgo[]>([])
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -234,10 +232,20 @@ function App() {
   }
 
   useEffect(() => {
-    fetch('parts_data.json')
-      .then(res => res.json())
-      .then(data => setPartsOptions(data))
-      .catch(err => console.error('Error loading parts:', err))
+    let cancelled = false
+    void fetchInventoryCatalog()
+      .then(catalog => {
+        if (!cancelled) setPartsOptions(catalog)
+      })
+      .catch(error => {
+        console.error('Error loading parts from Supabase:', error)
+        if (!cancelled) {
+          setNotification({ type: 'error', message: 'No se pudo cargar el catálogo de partes desde Supabase.' })
+          window.setTimeout(() => setNotification(null), 5000)
+        }
+      })
+
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => { loadRegistros() }, [])
@@ -726,6 +734,17 @@ function App() {
   }
   const clearDashFilter = () => { setDashFilterNoParte(''); setDashFilterNoParteInput('') }
 
+  const handleInventoryCatalogCreated = (item: PartOption) => {
+    setPartsOptions(current => {
+      const existingParts = current.filter(part => part.id.trim().toUpperCase() !== 'N/A' && part.id !== item.id)
+      const sortedParts = [...existingParts, item].sort((left, right) =>
+        left.id.localeCompare(right.id, undefined, { sensitivity: 'base' })
+      )
+      return [{ id: 'N/A', description: 'N/A' }, ...sortedParts]
+    })
+    showNotification('success', `Número de parte ${item.id} agregado al catálogo.`)
+  }
+
   const exportToExcel = () => {
     const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Nota']
     const rows = filteredRegistros.map(r => ({
@@ -797,7 +816,7 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* ── Tabs ── */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setActiveTab('registros')}
             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
@@ -819,6 +838,15 @@ function App() {
           >
             <BarChart2 className="w-5 h-5" />
             Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowInventoryCatalogModal(true)}
+            aria-label="Nuevo número de parte"
+            className="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors bg-emerald-600 text-white shadow-md hover:bg-emerald-700"
+          >
+            <Plus className="w-5 h-5" />
+            Nuevo número de parte
           </button>
           <button
             onClick={() => setActiveTab('interno')}
@@ -2362,6 +2390,12 @@ function App() {
           </div>
         </div>
       )}
+
+      <InventoryCatalogDialog
+        open={showInventoryCatalogModal}
+        onClose={() => setShowInventoryCatalogModal(false)}
+        onCreated={handleInventoryCatalogCreated}
+      />
 
       {/* Footer */}
       <footer className="bg-white mt-8 py-4 text-center text-gray-600 text-sm border-t border-gray-200">
