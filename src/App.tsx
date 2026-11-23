@@ -492,6 +492,15 @@ function App() {
     setDashFechaHasta('')
     setExpandedDetailKey(null)
   }
+  const dashFilterSummary = [
+    dashFilterHallazgo ? `Hallazgo: ${dashFilterHallazgo}` : '',
+    dashFilterNoParte ? `No. de Parte: ${dashFilterNoParte}` : '',
+    dashFilterUsuario ? `Usuario que registra: ${dashFilterUsuario}` : '',
+    dashFilterUsuarioKitteo ? `Usuario de Kitteo: ${dashFilterUsuarioKitteo}` : '',
+    dashFechaDesde && dashFechaHasta ? `Fechas: ${dashFechaDesde} a ${dashFechaHasta}`
+      : dashFechaDesde ? `Desde ${dashFechaDesde}`
+      : dashFechaHasta ? `Hasta ${dashFechaHasta}` : ''
+  ].filter(value => value.length > 0).join(' · ') || 'Todos los registros'
   const clearDashFechas = () => { setDashFechaDesde(''); setDashFechaHasta('') }
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
@@ -552,7 +561,7 @@ function App() {
       .sort((a, b) => b.value - a.value)
   }, [dashBase])
 
-  // 3. Top usuarios de kitteo
+  // 3. Todos los usuarios de Kitteo asociados a los registros filtrados
   const usuarioKitteoData = useMemo(() => {
     const counts: Record<string, number> = {}
     dashBase.forEach(r => {
@@ -562,7 +571,6 @@ function App() {
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 10)
   }, [dashBase])
 
   // ─── Helper: obtener semana ISO (YYYY-Wxx) de una fecha ─────────────────────
@@ -1398,12 +1406,13 @@ function App() {
 
               {/* Bar: Top usuarios de Kitteo */}
               <div className="bg-white rounded-xl shadow-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios de Kitteo</h3>
-                <p className="text-sm text-gray-500 mb-4">Personas de Kitteo asociadas a los hallazgos. “Usuario que registra” identifica a quien los capturó; el botón “Ver” muestra ese desglose.</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros por Usuario de Kitteo</h3>
+                <p className="text-sm text-gray-500 mb-1">Se muestran todos los usuarios. Cada barra cuenta registros asociados, no unidades; “Usuario que registra” es quien capturó el registro.</p>
+                <p className="text-xs text-indigo-700 mb-4">Suma de barras: {usuarioKitteoData.reduce((total, item) => total + item.value, 0)} de {dashBase.length} registros en los filtros actuales.</p>
                 {usuarioKitteoData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={320}>
+                  <ResponsiveContainer width="100%" height={Math.max(320, usuarioKitteoData.length * 40)}>
                     <BarChart
                       data={usuarioKitteoData}
                       layout="vertical"
@@ -1525,7 +1534,7 @@ function App() {
                   <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>
                   Celda con mayor registro
                 </h3>
-                <p className="text-sm text-gray-500 mb-4">Número de hallazgos registrados por celda de producción</p>
+                <p className="text-sm text-gray-500 mb-4">Registros por celda de producción · Alcance: {dashFilterSummary}.</p>
                 {celdaData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
                 ) : (
@@ -1550,7 +1559,7 @@ function App() {
                     {/* Top celda badge */}
                     {celdaData[0] && (
                       <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-lg">
-                        <span className="text-sm font-medium text-orange-700">Celda con más hallazgos:</span>
+                        <span className="text-sm font-medium text-orange-700">Celda con más registros en los filtros actuales:</span>
                         <span className="text-2xl font-extrabold text-orange-600">Celda {celdaData[0].name}</span>
                         <span className="ml-auto text-lg font-bold text-orange-800">{celdaData[0].value} registros</span>
                       </div>
