@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { Fragment, useState, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  Search, Plus, Download, FileSpreadsheet, X,
+  Search, Plus, Download, FileSpreadsheet, X, Eye, EyeOff,
   ChevronLeft, ChevronRight, AlertCircle, CheckCircle,
   Filter, BarChart2, ClipboardList, ShieldAlert
 } from 'lucide-react'
@@ -210,6 +210,10 @@ function App() {
   // Dashboard filter state
   const [dashFilterNoParte, setDashFilterNoParte] = useState('')
   const [dashFilterNoParteInput, setDashFilterNoParteInput] = useState('')
+  const [dashFilterHallazgo, setDashFilterHallazgo] = useState('')
+  const [dashFilterUsuario, setDashFilterUsuario] = useState('')
+  const [dashFilterUsuarioKitteo, setDashFilterUsuarioKitteo] = useState('')
+  const [expandedDetailKey, setExpandedDetailKey] = useState<string | null>(null)
   const [showDashPartsModal, setShowDashPartsModal] = useState(false)
   const [dashModalSearch, setDashModalSearch] = useState('')
   const [currentDashPartsPage, setCurrentDashPartsPage] = useState(1)
@@ -451,32 +455,81 @@ function App() {
 
   // ─── Dashboard data ───────────────────────────────────────────────────────
 
-  // Base dataset for dashboard (filtered by no_parte + rango de fechas global)
+  const dashHallazgoOptions = useMemo(() =>
+    Array.from(new Set<string>(registros.map(r => r.hallazgo).filter(value => Boolean(value)))).sort((a, b) => a.localeCompare(b, 'es')),
+  [registros])
+
+  const dashUsuarioOptions = useMemo(() =>
+    Array.from(new Set<string>(registros.map(r => r.usuario).filter(value => Boolean(value)))).sort((a, b) => a.localeCompare(b, 'es')),
+  [registros])
+
+  const dashUsuarioKitteoOptions = useMemo(() =>
+    Array.from(new Set<string>(registros.map(r => r.usuario_kitteo || 'SIN ASIGNAR'))).sort((a, b) => a.localeCompare(b, 'es')),
+  [registros])
+
+  // Base dataset for dashboard; all filters apply to charts and detail.
   const dashBase = useMemo(() => {
     return registros.filter(r => {
       if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
+      if (dashFilterHallazgo && r.hallazgo !== dashFilterHallazgo) return false
+      if (dashFilterUsuario && r.usuario !== dashFilterUsuario) return false
+      if (dashFilterUsuarioKitteo && (r.usuario_kitteo || 'SIN ASIGNAR') !== dashFilterUsuarioKitteo) return false
       if (dashFechaDesde && r.fecha < dashFechaDesde) return false
       if (dashFechaHasta && r.fecha > dashFechaHasta) return false
       return true
     })
-  }, [registros, dashFilterNoParte, dashFechaDesde, dashFechaHasta])
+  }, [registros, dashFilterNoParte, dashFilterHallazgo, dashFilterUsuario, dashFilterUsuarioKitteo, dashFechaDesde, dashFechaHasta])
 
   const hasDashFechaFilter = dashFechaDesde || dashFechaHasta
+  const hasActiveDashFilters = Boolean(dashFilterNoParte || dashFilterHallazgo || dashFilterUsuario || dashFilterUsuarioKitteo || hasDashFechaFilter)
+  const clearDashFilters = () => {
+    setDashFilterNoParte('')
+    setDashFilterNoParteInput('')
+    setDashFilterHallazgo('')
+    setDashFilterUsuario('')
+    setDashFilterUsuarioKitteo('')
+    setDashFechaDesde('')
+    setDashFechaHasta('')
+    setExpandedDetailKey(null)
+  }
   const clearDashFechas = () => { setDashFechaDesde(''); setDashFechaHasta('') }
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
   const hallazgoParteData = useMemo(() => {
-    const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number; cantidad: number }> = {}
+    const counts: Record<string, {
+      key: string
+      hallazgo: string
+      no_parte: string
+      no_parte_requerido: string
+      count: number
+      cantidad: number
+      registradores: Record<string, { nombre: string; veces: number; cantidad: number }>
+    }> = {}
     dashBase.forEach(r => {
       const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
-      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0, cantidad: 0 }
+      if (!counts[key]) counts[key] = {
+        key,
+        hallazgo: r.hallazgo,
+        no_parte: r.no_parte,
+        no_parte_requerido: r.no_parte_requerido || '',
+        count: 0,
+        cantidad: 0,
+        registradores: {}
+      }
       counts[key].count += 1
       counts[key].cantidad += r.cantidad || 0
+      const nombre = r.usuario || 'SIN USUARIO'
+      if (!counts[key].registradores[nombre]) {
+        counts[key].registradores[nombre] = { nombre, veces: 0, cantidad: 0 }
+      }
+      counts[key].registradores[nombre].veces += 1
+      counts[key].registradores[nombre].cantidad += r.cantidad || 0
     })
     return Object.values(counts)
       .sort((a, b) => b.count - a.count)
       .map(d => ({
         ...d,
+        registradores: Object.values(d.registradores).sort((a, b) => b.veces - a.veces),
         label: `${d.hallazgo}\n(${d.no_parte})`,
         shortLabel: d.no_parte,
         frecuencia: d.count <= 2 ? '1-2 veces' : d.count <= 5 ? '2-5 veces' : 'Más de 5 veces'
@@ -1143,10 +1196,20 @@ function App() {
                     <BarChart2 className="w-6 h-6" /> Dashboard de Hallazgos
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {(dashFilterNoParte || hasDashFechaFilter)
+                    {hasActiveDashFilters
                       ? `Registros filtrados: ${dashBase.length} de ${registros.length}`
                       : `Total de registros analizados: ${registros.length}`}
                   </p>
+                  {dashFilterUsuario && (
+                    <p className="text-sm text-indigo-700 mt-1">
+                      Mostrando los hallazgos y partes que registró {dashFilterUsuario}.
+                    </p>
+                  )}
+                  {dashFilterUsuarioKitteo && (
+                    <p className="text-sm text-indigo-700 mt-1">
+                      Hallazgos asociados al usuario de Kitteo {dashFilterUsuarioKitteo}.
+                    </p>
+                  )}
                 </div>
                 {/* Filtros del dashboard */}
                 <div className="flex flex-wrap items-end gap-4">
@@ -1180,6 +1243,33 @@ function App() {
                       </button>
                     )}
                   </div>
+                  {/* Filtro por tipo de hallazgo */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Filtrar por Hallazgo</label>
+                    <select value={dashFilterHallazgo} onChange={e => setDashFilterHallazgo(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[210px]">
+                      <option value="">Todos los hallazgos</option>
+                      {dashHallazgoOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </div>
+                  {/* Filtro por usuario que captura */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Usuario que registra</label>
+                    <select value={dashFilterUsuario} onChange={e => setDashFilterUsuario(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[190px]">
+                      <option value="">Todos los usuarios</option>
+                      {dashUsuarioOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </div>
+                  {/* Filtro por usuario de Kitteo asociado al hallazgo */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Usuario de Kitteo</label>
+                    <select value={dashFilterUsuarioKitteo} onChange={e => setDashFilterUsuarioKitteo(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[190px]">
+                      <option value="">Todos los usuarios de Kitteo</option>
+                      {dashUsuarioKitteoOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </div>
                   {/* Filtro por No. de Parte */}
                   <div className="flex items-end gap-2">
                     <div>
@@ -1199,6 +1289,12 @@ function App() {
                       </button>
                     )}
                   </div>
+                  {hasActiveDashFilters && (
+                    <button type="button" onClick={clearDashFilters}
+                      className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors">
+                      Limpiar filtros
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1303,7 +1399,7 @@ function App() {
               {/* Bar: Top usuarios de Kitteo */}
               <div className="bg-white rounded-xl shadow-xl p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios de Kitteo</h3>
-                <p className="text-sm text-gray-500 mb-4">Usuarios con más hallazgos registrados a su nombre</p>
+                <p className="text-sm text-gray-500 mb-4">Personas de Kitteo asociadas a los hallazgos. “Usuario que registra” identifica a quien los capturó; el botón “Ver” muestra ese desglose.</p>
                 {usuarioKitteoData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
                 ) : (
@@ -1506,7 +1602,8 @@ function App() {
 
             {/* ── Detail table ── */}
             <div className="bg-white rounded-xl shadow-xl p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Detalle: Hallazgo + No. de Parte</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">Detalle: Hallazgo + No. de Parte</h3>
+              <p className="text-sm text-gray-500 mb-4">Usa “Ver” para consultar quién registró cada combinación. El filtro por usuario muestra las combinaciones que esa persona capturó.</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1517,34 +1614,71 @@ function App() {
                       <th className="px-4 py-3">No. de Parte Requerido</th>
                       <th className="px-4 py-3 text-center">Veces registrado</th>
                       <th className="px-4 py-3 text-center">Cantidad</th>
-                      <th className="px-4 py-3 rounded-tr-lg">Frecuencia</th>
+                      <th className="px-4 py-3">Frecuencia</th>
+                      <th className="px-4 py-3 text-center rounded-tr-lg">Desglose</th>
                     </tr>
                   </thead>
                   <tbody>
                     {hallazgoParteData.map((d, idx) => (
-                      <tr key={idx} className={`border-b border-gray-100 hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <td className="px-4 py-2 text-gray-500">{idx + 1}</td>
-                        <td className="px-4 py-2">
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs border border-yellow-200">{d.hallazgo}</span>
-                        </td>
-                        <td className="px-4 py-2 font-medium text-gray-800">{d.no_parte}</td>
-                        <td className="px-4 py-2">
-                          {d.no_parte_requerido
-                            ? <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs border border-blue-200">{d.no_parte_requerido}</span>
-                            : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-2 text-center font-bold text-gray-900">{d.count}</td>
-                        <td className="px-4 py-2 text-center font-bold text-emerald-700">{d.cantidad}</td>
-                        <td className="px-4 py-2">
-                          <span className="px-2 py-1 rounded text-xs font-semibold text-white"
-                            style={{ backgroundColor: FREQ_COLORS[d.frecuencia] }}>
-                            {d.frecuencia}
-                          </span>
-                        </td>
-                      </tr>
+                      <Fragment key={d.key}>
+                        <tr className={`border-b border-gray-100 hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                          <td className="px-4 py-2 text-gray-500">{idx + 1}</td>
+                          <td className="px-4 py-2">
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs border border-yellow-200">{d.hallazgo}</span>
+                          </td>
+                          <td className="px-4 py-2 font-medium text-gray-800">{d.no_parte}</td>
+                          <td className="px-4 py-2">
+                            {d.no_parte_requerido
+                              ? <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs border border-blue-200">{d.no_parte_requerido}</span>
+                              : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-4 py-2 text-center font-bold text-gray-900">{d.count}</td>
+                          <td className="px-4 py-2 text-center font-bold text-emerald-700">{d.cantidad}</td>
+                          <td className="px-4 py-2">
+                            <span className="px-2 py-1 rounded text-xs font-semibold text-white"
+                              style={{ backgroundColor: FREQ_COLORS[d.frecuencia] }}>
+                              {d.frecuencia}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <button type="button"
+                              onClick={() => setExpandedDetailKey(current => current === d.key ? null : d.key)}
+                              aria-expanded={expandedDetailKey === d.key}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-semibold transition-colors">
+                              {expandedDetailKey === d.key
+                                ? <><EyeOff className="w-3.5 h-3.5" /> Ocultar</>
+                                : <><Eye className="w-3.5 h-3.5" /> Ver</>}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedDetailKey === d.key && (
+                          <tr className="border-b border-indigo-100 bg-indigo-50/60">
+                            <td colSpan={8} className="px-5 py-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                                <div>
+                                  <h4 className="font-semibold text-indigo-900">Usuarios que registraron este hallazgo</h4>
+                                  <p className="text-xs text-indigo-700 mt-1">{d.hallazgo} · No. de Parte: {d.no_parte}</p>
+                                </div>
+                                <p className="text-sm text-indigo-800">{d.count} registros · {d.cantidad} unidades</p>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {d.registradores.map(registrador => (
+                                  <div key={registrador.nombre} className="flex items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-white px-3 py-2">
+                                    <span className="font-medium text-gray-800">{registrador.nombre}</span>
+                                    <span className="text-right text-xs text-gray-600">
+                                      {registrador.veces} {registrador.veces === 1 ? 'registro' : 'registros'}
+                                      <span className="block text-emerald-700">{registrador.cantidad} unidades</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                     {hallazgoParteData.length === 0 && (
-                      <tr><td colSpan={7} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
+                      <tr><td colSpan={8} className="text-center py-8 text-gray-400">Sin datos para mostrar</td></tr>
                     )}
                   </tbody>
                 </table>
