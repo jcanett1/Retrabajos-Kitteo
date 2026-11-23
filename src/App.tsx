@@ -74,6 +74,73 @@ const USUARIOS = [
   'CARMEN'
 ]
 
+const USUARIOS_AUTORIZADOS = [
+  {
+    area: 'Kitteo',
+    usuarios: [
+      { nombre: 'Ma. Elizabeth Olivarria Sanchez', iniciales: 'EO' },
+      { nombre: 'Maredna del Milagro Puig Arvizu', iniciales: 'MP' },
+      { nombre: 'Adriana Janely Sanabria Castro', iniciales: 'AS' },
+      { nombre: 'Diana Mendez Rodriguez', iniciales: 'DM' },
+      { nombre: 'Yodeli Gpe. Lopez Manrriquez', iniciales: 'YL' },
+      { nombre: 'Karel Yajaira Ontiveros Moreno', iniciales: 'KY' },
+      { nombre: 'Denisse Abril Sansarric Valverde', iniciales: 'DS' },
+      { nombre: 'Michael Meza Noriega', iniciales: 'MM' },
+      { nombre: 'Francisco Eduardo Leyva Martinez', iniciales: 'FL' },
+      { nombre: 'Francisco Javier Vega', iniciales: 'FJ' },
+      { nombre: 'Francisco Antonio Gastelum Lopez', iniciales: 'AG' },
+      { nombre: 'Alejandro Vazquez Urrea', iniciales: 'AV' },
+      { nombre: 'Eduardo Cervantes Salazar', iniciales: 'EC' },
+      { nombre: 'Cruz Diego Lopez Vargas', iniciales: 'CD' },
+    ],
+  },
+  {
+    area: 'Almacén',
+    usuarios: [
+      { nombre: 'Eleazar Santana Paes', iniciales: 'ES' },
+      { nombre: 'Gil Eduardo Macedo', iniciales: 'GM' },
+      { nombre: 'Jorge Santillanes', iniciales: 'JS' },
+      { nombre: 'Mario Grajeda', iniciales: 'MG' },
+    ],
+  },
+  {
+    area: 'Producción',
+    usuarios: [
+      { nombre: 'RAMIREZ/VALENZUELA/NORMA PATRICIA', iniciales: 'PR' },
+      { nombre: 'SOLARES/GARCIA/NORMA EDILIA', iniciales: 'NS' },
+      { nombre: 'HERNANDEZ/PEREZ/KIMBERLY ELIZABETH', iniciales: 'KH' },
+      { nombre: 'CHAVEZ/LEYVA/BRYAN ALFREDO', iniciales: 'BC' },
+      { nombre: 'CAZARES/VALENZUELA/AZALIA YAHAIRA', iniciales: 'AC' },
+      { nombre: 'LUGO/CASTRO/LETICIA/JULIETH', iniciales: 'JL' },
+      { nombre: 'ESPINOZA/AMAVISZCA/EDITH/EUNICE', iniciales: 'EE' },
+    ],
+  },
+]
+
+const renderUsuarioAutorizadoTick = ({ x, y, payload }: any) => {
+  const words = String(payload?.value ?? '').replace(/\//g, ' / ').split(/\s+/)
+  const lines: string[] = []
+  let currentLine = ''
+  words.forEach(word => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word
+    if (candidate.length > 22 && currentLine) {
+      lines.push(currentLine)
+      currentLine = word
+    } else {
+      currentLine = candidate
+    }
+  })
+  if (currentLine) lines.push(currentLine)
+
+  return (
+    <text x={x} y={y} textAnchor="end" dominantBaseline="central" fill="#6b7280" fontSize={10}>
+      {lines.map((line, index) => (
+        <tspan key={`${index}-${line}`} x={x} y={y + (index - (lines.length - 1) / 2) * 11}>{line}</tspan>
+      ))}
+    </text>
+  )
+}
+
 const AREA_OPTIONS = [
   'DOCK AUDIT',
   'KITTEO',
@@ -418,21 +485,21 @@ function App() {
   const clearInternoFilters = () => { setFilterInternoFechaDesde(''); setFilterInternoFechaHasta(''); setFilterInternoUsuario('') }
 
   const exportInternoToExcel = () => {
-    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Usuario Validó', 'Nota']
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario autorizado', 'Usuario Validó', 'Nota']
     const rows = filteredRegistrosInterno.map(r => ({
       'Fecha': r.fecha, 'Área': r.area, 'Celda': r.celda || '',
       'No. Orden': r.noOrden || r.no_orden || '', 'Hallazgo': r.hallazgo,
       'No. de Parte': r.noParte || r.no_parte || '',
       'No. de Parte Requerido': r.no_parte_requerido || '',
       'Cantidad': r.cantidad, 'Usuario': r.usuario,
-      'Usuario Kitteo': r.usuario_kitteo || '',
+      'Usuario autorizado': r.usuario_kitteo || '',
       'Usuario Validó': (r as any).usuario_validacion || '',
       'Nota': r.nota || ''
     }))
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
     worksheet['!cols'] = [
       { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 30 },
-      { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 30 }
+      { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 14 }, { wch: 40 }, { wch: 18 }, { wch: 30 }
     ]
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos Interno')
@@ -505,7 +572,7 @@ function App() {
     dashFilterHallazgos.length > 0 ? `Hallazgos: ${dashFilterHallazgos.join(', ')}` : '',
     dashFilterNoParte ? `No. de Parte: ${dashFilterNoParte}` : '',
     dashFilterUsuario ? `Usuario que registra: ${dashFilterUsuario}` : '',
-    dashFilterUsuarioKitteo ? `Usuario de Kitteo: ${dashFilterUsuarioKitteo}` : '',
+    dashFilterUsuarioKitteo ? `Usuario autorizado: ${dashFilterUsuarioKitteo}` : '',
     dashFechaDesde && dashFechaHasta ? `Fechas: ${dashFechaDesde} a ${dashFechaHasta}`
       : dashFechaDesde ? `Desde ${dashFechaDesde}`
       : dashFechaHasta ? `Hasta ${dashFechaHasta}` : ''
@@ -570,7 +637,7 @@ function App() {
       .sort((a, b) => b.value - a.value)
   }, [dashBase])
 
-  // 3. Todos los usuarios de Kitteo asociados a los registros filtrados
+  // 3. Todos los usuarios autorizados asociados a los registros filtrados
   const usuarioKitteoData = useMemo(() => {
     const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashBase.forEach(r => {
@@ -818,7 +885,7 @@ function App() {
   }
 
   const exportToExcel = () => {
-    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario Kitteo', 'Nota']
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario autorizado', 'Nota']
     const rows = filteredRegistros.map(r => ({
       'Fecha': r.fecha,
       'Área': r.area,
@@ -829,7 +896,7 @@ function App() {
       'No. de Parte Requerido': r.no_parte_requerido || '',
       'Cantidad': r.cantidad,
       'Usuario': r.usuario,
-      'Usuario Kitteo': r.usuario_kitteo || '',
+      'Usuario autorizado': r.usuario_kitteo || '',
       'Nota': r.nota || ''
     }))
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
@@ -844,7 +911,7 @@ function App() {
       { wch: 22 }, // No. de Parte Requerido
       { wch: 10 }, // Cantidad
       { wch: 14 }, // Usuario
-      { wch: 16 }, // Usuario Kitteo
+      { wch: 40 }, // Usuario autorizado
       { wch: 30 }, // Nota
     ]
     const workbook = XLSX.utils.book_new()
@@ -1032,11 +1099,21 @@ function App() {
                     {USUARIOS.map(usr => <option key={usr} value={usr}>{usr}</option>)}
                   </select>
                 </div>
-                {/* Usuario Kitteo */}
+                {/* Usuario autorizado */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario de Kitteo *</label>
-                  <input type="text" value={usuarioKitteo} onChange={e => setUsuarioKitteo(e.target.value.toUpperCase())} placeholder="Nombre o iniciales"
-                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900" required />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario autorizado *</label>
+                  <select value={usuarioKitteo} onChange={e => setUsuarioKitteo(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-gray-900" required>
+                    <option value="">Seleccione un usuario autorizado</option>
+                    {USUARIOS_AUTORIZADOS.map(grupo => (
+                      <optgroup key={grupo.area} label={grupo.area}>
+                        {grupo.usuarios.map(persona => {
+                          const value = `${persona.nombre} (${persona.iniciales})`
+                          return <option key={persona.iniciales} value={value}>{value}</option>
+                        })}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
                 {/* Nota */}
                 <div className="md:col-span-2 lg:col-span-2">
@@ -1136,7 +1213,7 @@ function App() {
                           <th className="px-4 py-3">No. de Parte Requerido</th>
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Usuario</th>
-                          <th className="px-4 py-3">Usuario Kitteo</th>
+                          <th className="px-4 py-3">Usuario autorizado</th>
                           <th className="px-4 py-3 rounded-tr-lg">Nota</th>
                         </tr>
                       </thead>
@@ -1226,7 +1303,7 @@ function App() {
                   )}
                   {dashFilterUsuarioKitteo && (
                     <p className="text-sm text-indigo-700 mt-1">
-                      Hallazgos asociados al usuario de Kitteo {dashFilterUsuarioKitteo}.
+                      Hallazgos asociados al usuario autorizado {dashFilterUsuarioKitteo}.
                     </p>
                   )}
                 </div>
@@ -1324,12 +1401,12 @@ function App() {
                       {dashUsuarioOptions.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </div>
-                  {/* Filtro por usuario de Kitteo asociado al hallazgo */}
+                  {/* Filtro por usuario autorizado asociado al hallazgo */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Usuario de Kitteo</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Usuario autorizado</label>
                     <select value={dashFilterUsuarioKitteo} onChange={e => setDashFilterUsuarioKitteo(e.target.value)}
-                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[190px]">
-                      <option value="">Todos los usuarios de Kitteo</option>
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[260px]">
+                      <option value="">Todos los usuarios autorizados</option>
                       {dashUsuarioKitteoOptions.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </div>
@@ -1459,9 +1536,9 @@ function App() {
                 )}
               </div>
 
-              {/* Barras: registros y unidades por usuario de Kitteo */}
+              {/* Barras: registros y unidades por usuario autorizado */}
               <div className="bg-white rounded-xl shadow-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros y unidades por Usuario de Kitteo</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros y unidades por Usuario autorizado</h3>
                 <p className="text-sm text-gray-500 mb-1">Registros = número de capturas; unidades = suma del campo Cantidad. “Usuario que registra” es quien capturó cada registro.</p>
                 <p className="text-xs text-indigo-700 mb-4">En los filtros actuales: {usuarioKitteoData.reduce((total, item) => total + item.registros, 0)} registros · {usuarioKitteoData.reduce((total, item) => total + item.cantidad, 0)} unidades.</p>
                 {usuarioKitteoData.length === 0 ? (
@@ -1475,7 +1552,7 @@ function App() {
                     >
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
+                      <YAxis type="category" dataKey="name" width={185} tick={renderUsuarioAutorizadoTick} />
                       <Tooltip />
                       <Legend formatter={(value) => <span className="text-xs text-gray-700">{value}</span>} wrapperStyle={{ fontSize: '11px' }} />
                       <Bar dataKey="registros" name="Registros" fill="#6366f1" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }} />
@@ -1836,11 +1913,21 @@ function App() {
                     {USUARIOS.map(usr => <option key={usr} value={usr}>{usr}</option>)}
                   </select>
                 </div>
-                {/* Usuario Kitteo */}
+                {/* Usuario autorizado */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario de Kitteo *</label>
-                  <input type="text" value={internoUsuarioKitteo} onChange={e => setInternoUsuarioKitteo(e.target.value.toUpperCase())} placeholder="Nombre o iniciales"
-                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario autorizado *</label>
+                  <select value={internoUsuarioKitteo} onChange={e => setInternoUsuarioKitteo(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 text-gray-900" required>
+                    <option value="">Seleccione un usuario autorizado</option>
+                    {USUARIOS_AUTORIZADOS.map(grupo => (
+                      <optgroup key={grupo.area} label={grupo.area}>
+                        {grupo.usuarios.map(persona => {
+                          const value = `${persona.nombre} (${persona.iniciales})`
+                          return <option key={persona.iniciales} value={value}>{value}</option>
+                        })}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
                 {/* Nota */}
                 <div className="md:col-span-2 lg:col-span-1">
@@ -1942,7 +2029,7 @@ function App() {
                           <th className="px-4 py-3">No. de Parte Requerido</th>
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Usuario</th>
-                          <th className="px-4 py-3">Usuario Kitteo</th>
+                          <th className="px-4 py-3">Usuario autorizado</th>
                           <th className="px-4 py-3">Usuario Validó</th>
                           <th className="px-4 py-3 rounded-tr-lg">Nota</th>
                         </tr>
@@ -2124,7 +2211,7 @@ function App() {
                 )}
               </div>
               <div className="bg-white rounded-xl shadow-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios de Kitteo (INTERNO)</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios autorizados (INTERNO)</h3>
                 <p className="text-sm text-gray-500 mb-4">Usuarios con más hallazgos internos registrados</p>
                 {internoUsuarioKitteoData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
