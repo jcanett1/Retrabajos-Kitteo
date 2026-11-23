@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Search, Plus, Download, FileSpreadsheet, X, Eye, EyeOff,
-  ChevronLeft, ChevronRight, AlertCircle, CheckCircle,
+  ChevronLeft, ChevronRight, ChevronDown, AlertCircle, CheckCircle,
   Filter, BarChart2, ClipboardList, ShieldAlert
 } from 'lucide-react'
 import {
@@ -210,7 +210,9 @@ function App() {
   // Dashboard filter state
   const [dashFilterNoParte, setDashFilterNoParte] = useState('')
   const [dashFilterNoParteInput, setDashFilterNoParteInput] = useState('')
-  const [dashFilterHallazgo, setDashFilterHallazgo] = useState('')
+  const [dashFilterHallazgos, setDashFilterHallazgos] = useState<string[]>([])
+  const [showDashHallazgoMenu, setShowDashHallazgoMenu] = useState(false)
+  const [dashHallazgoSearch, setDashHallazgoSearch] = useState('')
   const [dashFilterUsuario, setDashFilterUsuario] = useState('')
   const [dashFilterUsuarioKitteo, setDashFilterUsuarioKitteo] = useState('')
   const [expandedDetailKey, setExpandedDetailKey] = useState<string | null>(null)
@@ -471,29 +473,36 @@ function App() {
   const dashBase = useMemo(() => {
     return registros.filter(r => {
       if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
-      if (dashFilterHallazgo && r.hallazgo !== dashFilterHallazgo) return false
+      if (dashFilterHallazgos.length > 0 && !dashFilterHallazgos.includes(r.hallazgo)) return false
       if (dashFilterUsuario && r.usuario !== dashFilterUsuario) return false
       if (dashFilterUsuarioKitteo && (r.usuario_kitteo || 'SIN ASIGNAR') !== dashFilterUsuarioKitteo) return false
       if (dashFechaDesde && r.fecha < dashFechaDesde) return false
       if (dashFechaHasta && r.fecha > dashFechaHasta) return false
       return true
     })
-  }, [registros, dashFilterNoParte, dashFilterHallazgo, dashFilterUsuario, dashFilterUsuarioKitteo, dashFechaDesde, dashFechaHasta])
+  }, [registros, dashFilterNoParte, dashFilterHallazgos, dashFilterUsuario, dashFilterUsuarioKitteo, dashFechaDesde, dashFechaHasta])
 
   const hasDashFechaFilter = dashFechaDesde || dashFechaHasta
-  const hasActiveDashFilters = Boolean(dashFilterNoParte || dashFilterHallazgo || dashFilterUsuario || dashFilterUsuarioKitteo || hasDashFechaFilter)
+  const hasActiveDashFilters = Boolean(dashFilterNoParte || dashFilterHallazgos.length > 0 || dashFilterUsuario || dashFilterUsuarioKitteo || hasDashFechaFilter)
   const clearDashFilters = () => {
     setDashFilterNoParte('')
     setDashFilterNoParteInput('')
-    setDashFilterHallazgo('')
+    setDashFilterHallazgos([])
+    setShowDashHallazgoMenu(false)
+    setDashHallazgoSearch('')
     setDashFilterUsuario('')
     setDashFilterUsuarioKitteo('')
     setDashFechaDesde('')
     setDashFechaHasta('')
     setExpandedDetailKey(null)
   }
+  const toggleDashHallazgo = (hallazgo: string) => {
+    setDashFilterHallazgos(current => current.includes(hallazgo)
+      ? current.filter(item => item !== hallazgo)
+      : [...current, hallazgo])
+  }
   const dashFilterSummary = [
-    dashFilterHallazgo ? `Hallazgo: ${dashFilterHallazgo}` : '',
+    dashFilterHallazgos.length > 0 ? `Hallazgos: ${dashFilterHallazgos.join(', ')}` : '',
     dashFilterNoParte ? `No. de Parte: ${dashFilterNoParte}` : '',
     dashFilterUsuario ? `Usuario que registra: ${dashFilterUsuario}` : '',
     dashFilterUsuarioKitteo ? `Usuario de Kitteo: ${dashFilterUsuarioKitteo}` : '',
@@ -1251,14 +1260,58 @@ function App() {
                       </button>
                     )}
                   </div>
-                  {/* Filtro por tipo de hallazgo */}
-                  <div>
+                  {/* Filtro de selección múltiple por tipo de hallazgo */}
+                  <div className="relative min-w-[250px]">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Filtrar por Hallazgo</label>
-                    <select value={dashFilterHallazgo} onChange={e => setDashFilterHallazgo(e.target.value)}
-                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[210px]">
-                      <option value="">Todos los hallazgos</option>
-                      {dashHallazgoOptions.map(option => <option key={option} value={option}>{option}</option>)}
-                    </select>
+                    <button type="button" onClick={() => setShowDashHallazgoMenu(open => !open)}
+                      aria-expanded={showDashHallazgoMenu} aria-controls="dash-hallazgo-options"
+                      className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-left text-gray-900 hover:bg-indigo-50 focus:ring-2 focus:ring-indigo-400 flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate">
+                        {dashFilterHallazgos.length === 0
+                          ? 'Todos los hallazgos'
+                          : dashFilterHallazgos.length === 1
+                            ? dashFilterHallazgos[0]
+                            : `${dashFilterHallazgos.length} hallazgos seleccionados`}
+                      </span>
+                      <ChevronDown className="w-4 h-4 flex-shrink-0 text-indigo-500" />
+                    </button>
+                    {showDashHallazgoMenu && (
+                      <div id="dash-hallazgo-options" className="absolute z-30 mt-2 w-full min-w-[280px] rounded-xl border border-indigo-200 bg-white p-3 shadow-xl">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-gray-700">Selecciona uno o varios</span>
+                          <button type="button" onClick={() => setDashFilterHallazgos([])}
+                            disabled={dashFilterHallazgos.length === 0}
+                            className="text-xs font-medium text-indigo-700 hover:text-indigo-900 disabled:opacity-40">
+                            Limpiar selección
+                          </button>
+                        </div>
+                        <div className="relative mb-2">
+                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <input type="search" value={dashHallazgoSearch} onChange={e => setDashHallazgoSearch(e.target.value)}
+                            placeholder="Buscar hallazgo..."
+                            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                        </div>
+                        <div className="max-h-60 overflow-y-auto">
+                          {dashHallazgoOptions.filter(option => option.toLowerCase().includes(dashHallazgoSearch.toLowerCase())).map(option => (
+                            <label key={option} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-indigo-50">
+                              <input type="checkbox" checked={dashFilterHallazgos.includes(option)} onChange={() => toggleDashHallazgo(option)}
+                                className="mt-0.5 accent-indigo-600" />
+                              <span>{option}</span>
+                            </label>
+                          ))}
+                          {dashHallazgoOptions.filter(option => option.toLowerCase().includes(dashHallazgoSearch.toLowerCase())).length === 0 && (
+                            <p className="px-2 py-4 text-center text-sm text-gray-400">No se encontraron hallazgos</p>
+                          )}
+                        </div>
+                        <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+                          <span className="text-xs text-gray-500">{dashFilterHallazgos.length} seleccionados</span>
+                          <button type="button" onClick={() => setShowDashHallazgoMenu(false)}
+                            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                            Listo
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {/* Filtro por usuario que captura */}
                   <div>
