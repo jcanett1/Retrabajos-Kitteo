@@ -572,14 +572,16 @@ function App() {
 
   // 3. Todos los usuarios de Kitteo asociados a los registros filtrados
   const usuarioKitteoData = useMemo(() => {
-    const counts: Record<string, number> = {}
+    const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashBase.forEach(r => {
       const uk = r.usuario_kitteo || 'SIN ASIGNAR'
-      counts[uk] = (counts[uk] || 0) + 1
+      if (!counts[uk]) counts[uk] = { registros: 0, cantidad: 0 }
+      counts[uk].registros += 1
+      counts[uk].cantidad += r.cantidad || 0
     })
     return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
+      .map(([name, values]) => ({ name, ...values }))
+      .sort((a, b) => b.registros - a.registros)
   }, [dashBase])
 
   // ─── Helper: obtener semana ISO (YYYY-Wxx) de una fecha ─────────────────────
@@ -1457,15 +1459,15 @@ function App() {
                 )}
               </div>
 
-              {/* Bar: Top usuarios de Kitteo */}
+              {/* Barras: registros y unidades por usuario de Kitteo */}
               <div className="bg-white rounded-xl shadow-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros por Usuario de Kitteo</h3>
-                <p className="text-sm text-gray-500 mb-1">Se muestran todos los usuarios. Cada barra cuenta registros asociados, no unidades; “Usuario que registra” es quien capturó el registro.</p>
-                <p className="text-xs text-indigo-700 mb-4">Suma de barras: {usuarioKitteoData.reduce((total, item) => total + item.value, 0)} de {dashBase.length} registros en los filtros actuales.</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros y unidades por Usuario de Kitteo</h3>
+                <p className="text-sm text-gray-500 mb-1">Registros = número de capturas; unidades = suma del campo Cantidad. “Usuario que registra” es quien capturó cada registro.</p>
+                <p className="text-xs text-indigo-700 mb-4">En los filtros actuales: {usuarioKitteoData.reduce((total, item) => total + item.registros, 0)} registros · {usuarioKitteoData.reduce((total, item) => total + item.cantidad, 0)} unidades.</p>
                 {usuarioKitteoData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={Math.max(320, usuarioKitteoData.length * 40)}>
+                  <ResponsiveContainer width="100%" height={Math.max(320, usuarioKitteoData.length * 48)}>
                     <BarChart
                       data={usuarioKitteoData}
                       layout="vertical"
@@ -1474,13 +1476,10 @@ function App() {
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
                       <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                      <Tooltip formatter={(value) => [`${value} registros`, 'Total']} />
-                      <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]}
-                        label={{ position: 'right', fontSize: 12 }}>
-                        {usuarioKitteoData.map((_, index) => (
-                          <Cell key={`uk-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Bar>
+                      <Tooltip />
+                      <Legend formatter={(value) => <span className="text-xs text-gray-700">{value}</span>} wrapperStyle={{ fontSize: '11px' }} />
+                      <Bar dataKey="registros" name="Registros" fill="#6366f1" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }} />
+                      <Bar dataKey="cantidad" name="Unidades" fill="#10b981" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
