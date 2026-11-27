@@ -13,7 +13,7 @@ import { supabase } from './supabaseClient'
 import InventoryCatalogDialog from './components/InventoryCatalogDialog'
 import { fetchInventoryCatalog, type PartOption } from './lib/inventoryCatalog'
 
-import { canonicalizarUsuarioKitteo } from './lib/usuarioKitteo'
+import { canonicalizarUsuarioAutorizadoKitteo, canonicalizarUsuarioKitteo } from './lib/usuarioKitteo'
 
 interface Hallazgo {
   id: string
@@ -118,6 +118,8 @@ const USUARIOS_AUTORIZADOS = [
     ],
   },
 ]
+
+const USUARIOS_AUTORIZADOS_PERSONAS = USUARIOS_AUTORIZADOS.flatMap(grupo => grupo.usuarios)
 
 const renderUsuarioAutorizadoTick = ({ x, y, payload }: any) => {
   const words = String(payload?.value ?? '').replace(/\//g, ' / ').split(/\s+/)
@@ -553,7 +555,9 @@ function App() {
   [registros])
 
   const dashUsuarioKitteoOptions = useMemo(() =>
-    Array.from(new Set<string>(registros.map(r => canonicalizarUsuarioKitteo(r.usuario_kitteo))))
+    Array.from(new Set<string>(registros
+      .map(r => canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS))
+      .filter((value): value is string => value !== null)))
       .sort((a, b) => a.localeCompare(b, 'es')),
   [registros])
 
@@ -563,7 +567,7 @@ function App() {
       if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
       if (dashFilterHallazgos.length > 0 && !dashFilterHallazgos.includes(r.hallazgo)) return false
       if (dashFilterUsuario && r.usuario !== dashFilterUsuario) return false
-      if (dashFilterUsuarioKitteo && canonicalizarUsuarioKitteo(r.usuario_kitteo) !== dashFilterUsuarioKitteo) return false
+      if (dashFilterUsuarioKitteo && canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS) !== dashFilterUsuarioKitteo) return false
       if (dashFechaDesde && r.fecha < dashFechaDesde) return false
       if (dashFechaHasta && r.fecha > dashFechaHasta) return false
       return true
@@ -662,7 +666,8 @@ function App() {
   const usuarioKitteoData = useMemo(() => {
     const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashBase.forEach(r => {
-      const uk = canonicalizarUsuarioKitteo(r.usuario_kitteo)
+      const uk = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS)
+        ?? canonicalizarUsuarioKitteo(r.usuario_kitteo)
       if (!counts[uk]) counts[uk] = { registros: 0, cantidad: 0 }
       counts[uk].registros += 1
       counts[uk].cantidad += r.cantidad || 0
@@ -797,7 +802,8 @@ function App() {
   const internoUsuarioKitteoData = useMemo(() => {
     const counts: Record<string, number> = {}
     dashInternoBase.forEach(r => {
-      const uk = canonicalizarUsuarioKitteo(r.usuario_kitteo)
+      const uk = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS)
+        ?? canonicalizarUsuarioKitteo(r.usuario_kitteo)
       counts[uk] = (counts[uk] || 0) + 1
     })
     return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10)

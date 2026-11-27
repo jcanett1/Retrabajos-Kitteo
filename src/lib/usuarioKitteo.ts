@@ -46,6 +46,24 @@ for (const group of ALIAS_GROUPS) {
   }
 }
 
+export function canonicalizarUsuarioAutorizadoKitteo(
+  value: string | null | undefined,
+  usuariosAutorizados: readonly { nombre: string; iniciales: string }[]
+): string | null {
+  const canonical = canonicalizarUsuarioKitteo(value)
+  const candidateKeys = new Set([
+    normalizeAliasKey(value ?? ''),
+    normalizeAliasKey(canonical),
+  ])
+
+  const usuario = usuariosAutorizados.find(persona =>
+    [persona.nombre, `${persona.nombre} (${persona.iniciales})`, persona.iniciales]
+      .some(candidate => candidateKeys.has(normalizeAliasKey(candidate)))
+  )
+
+  return usuario?.nombre ?? null
+}
+
 export function canonicalizarUsuarioKitteo(value?: string | null): string {
   const original = value ?? ''
   if (!original.trim()) return 'SIN ASIGNAR'
