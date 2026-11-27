@@ -21,6 +21,7 @@ const ALIAS_GROUPS: AliasGroup[] = [
   { canonical: 'HERNANDEZ/PEREZ/KIMBERLY ELIZABETH', aliases: ['KIMBERLY HERNANDEZ', 'KH'] },
   { canonical: 'Maredna del Milagro Puig Arvizu', aliases: ['MAREDNA PIUG', 'MAREDNA PUIG', 'MP'] },
   { canonical: 'Mario Grajeda', aliases: ['MAARIO GRAJEDA', 'MNARIO GRAJEDA', 'MARIO', 'MARIO GRAJEDA', 'Mario Grajeda (MG)', 'MG'] },
+  { canonical: 'MILAGROS NAVARRO', aliases: ['MILAGROS N'] },
   { canonical: 'Michael Meza Noriega', aliases: ['MICHAEL', 'MICHAEL MEZA', 'MM'] },
   { canonical: 'SOLARES/GARCIA/NORMA EDILIA', aliases: ['NORMA SOLARES', 'NS'] },
   { canonical: 'RAMIREZ/VALENZUELA/NORMA PATRICIA', aliases: ['PATRICIA RAMIRES', 'PATRICIA RAMIREZ', 'PR'] },
@@ -48,7 +49,8 @@ for (const group of ALIAS_GROUPS) {
 
 export function canonicalizarUsuarioAutorizadoKitteo(
   value: string | null | undefined,
-  usuariosAutorizados: readonly { nombre: string; iniciales: string }[]
+  usuariosAutorizados: readonly { nombre: string; iniciales: string }[],
+  nombresAdicionales: readonly string[] = []
 ): string | null {
   const canonical = canonicalizarUsuarioKitteo(value)
   const candidateKeys = new Set([
@@ -61,7 +63,8 @@ export function canonicalizarUsuarioAutorizadoKitteo(
       .some(candidate => candidateKeys.has(normalizeAliasKey(candidate)))
   )
 
-  return usuario?.nombre ?? null
+  if (usuario) return usuario.nombre
+  return nombresAdicionales.find(nombre => candidateKeys.has(normalizeAliasKey(nombre))) ?? null
 }
 
 export function canonicalizarUsuarioKitteo(value?: string | null): string {
