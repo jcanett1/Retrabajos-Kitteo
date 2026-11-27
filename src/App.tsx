@@ -25,6 +25,7 @@ interface Hallazgo {
   cantidad: number
   usuario: string
   usuario_kitteo?: string
+  usuario_validacion?: string
   no_parte_requerido?: string
   celda?: string
   nota?: string
@@ -327,6 +328,17 @@ function App() {
   // ── Estado Dashboard INTERNO ──────────────────────────────────────────────
   const [dashInternoFechaDesde, setDashInternoFechaDesde] = useState<string>('')
   const [dashInternoFechaHasta, setDashInternoFechaHasta] = useState<string>('')
+  const [dashInternoDatePreset, setDashInternoDatePreset] = useState<'week' | 'month' | 'all' | 'custom'>('all')
+  const [dashInternoFilterHallazgos, setDashInternoFilterHallazgos] = useState<string[]>([])
+  const [showDashInternoHallazgoMenu, setShowDashInternoHallazgoMenu] = useState(false)
+  const [dashInternoHallazgoSearch, setDashInternoHallazgoSearch] = useState('')
+  const [dashInternoFilterUsuario, setDashInternoFilterUsuario] = useState('')
+  const [dashInternoFilterUsuarioKitteo, setDashInternoFilterUsuarioKitteo] = useState('')
+  const [dashInternoFilterCelda, setDashInternoFilterCelda] = useState('')
+  const [dashInternoFilterNoParte, setDashInternoFilterNoParte] = useState('')
+  const [dashInternoFilterNoParteRequerido, setDashInternoFilterNoParteRequerido] = useState('')
+  const [dashInternoSearch, setDashInternoSearch] = useState('')
+  const [dashInternoRecordsPage, setDashInternoRecordsPage] = useState(1)
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -898,21 +910,146 @@ function App() {
 
   // ─── Dashboard INTERNO data ───────────────────────────────────────────────
   const hasDashInternoFechaFilter = dashInternoFechaDesde || dashInternoFechaHasta
-  const clearDashInternoFechas = () => { setDashInternoFechaDesde(''); setDashInternoFechaHasta('') }
+  const clearDashInternoFechas = () => {
+    setDashInternoFechaDesde('')
+    setDashInternoFechaHasta('')
+    setDashInternoDatePreset('all')
+  }
+  const dashInternoHallazgoOptions = useMemo(() =>
+    Array.from(new Set<string>(registrosInterno.map(r => r.hallazgo).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'es')),
+  [registrosInterno])
+  const dashInternoUsuarioOptions = useMemo(() =>
+    Array.from(new Set<string>(registrosInterno.map(r => r.usuario).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'es')),
+  [registrosInterno])
+  const dashInternoUsuarioKitteoOptions = useMemo(() => {
+    const recognized = registrosInterno
+      .map(r => canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD))
+      .filter((value): value is string => value !== null)
+    const hasUnidentified = registrosInterno.some(r =>
+      !canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD))
+    return Array.from(new Set([...recognized, ...(hasUnidentified ? [UNIDENTIFIED_AUTHORIZED_FILTER] : [])]))
+      .sort((a, b) => {
+        if (a === UNIDENTIFIED_AUTHORIZED_FILTER) return 1
+        if (b === UNIDENTIFIED_AUTHORIZED_FILTER) return -1
+        return a.localeCompare(b, 'es')
+      })
+  }, [registrosInterno])
+  const dashInternoCeldaOptions = useMemo(() =>
+    Array.from(new Set<string>(registrosInterno.map(r => r.celda?.trim() || 'SIN CELDA')))
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+  [registrosInterno])
+  const dashInternoNoParteOptions = useMemo(() =>
+    Array.from(new Set<string>(registrosInterno.map(r => r.no_parte?.trim() || '').filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+  [registrosInterno])
+  const dashInternoNoParteRequeridoOptions = useMemo(() => {
+    const values = registrosInterno.map(r => r.no_parte_requerido?.trim() || '')
+    const options = values.filter(Boolean)
+    if (values.some(value => !value)) options.push(NO_REQUIRED_PART_FILTER)
+    return Array.from(new Set<string>(options)).sort((a, b) => {
+      if (a === NO_REQUIRED_PART_FILTER) return 1
+      if (b === NO_REQUIRED_PART_FILTER) return -1
+      return a.localeCompare(b, 'es', { numeric: true })
+    })
+  }, [registrosInterno])
+
+  const hasActiveDashInternoFilters = Boolean(
+    hasDashInternoFechaFilter || dashInternoFilterHallazgos.length || dashInternoFilterUsuario ||
+    dashInternoFilterUsuarioKitteo || dashInternoFilterCelda || dashInternoFilterNoParte ||
+    dashInternoFilterNoParteRequerido || dashInternoSearch.trim()
+  )
+  const clearDashInternoFilters = () => {
+    setDashInternoFechaDesde('')
+    setDashInternoFechaHasta('')
+    setDashInternoDatePreset('all')
+    setDashInternoFilterHallazgos([])
+    setShowDashInternoHallazgoMenu(false)
+    setDashInternoHallazgoSearch('')
+    setDashInternoFilterUsuario('')
+    setDashInternoFilterUsuarioKitteo('')
+    setDashInternoFilterCelda('')
+    setDashInternoFilterNoParte('')
+    setDashInternoFilterNoParteRequerido('')
+    setDashInternoSearch('')
+    setDashInternoRecordsPage(1)
+  }
+  const applyDashInternoPreset = (preset: 'week' | 'month' | 'all') => {
+    if (preset === 'all') {
+      setDashInternoFechaDesde('')
+      setDashInternoFechaHasta('')
+    } else if (preset === 'week') {
+      const monday = new Date()
+      monday.setHours(0, 0, 0, 0)
+      const day = monday.getDay() || 7
+      monday.setDate(monday.getDate() - day + 1)
+      const sunday = new Date(monday)
+      sunday.setDate(sunday.getDate() + 6)
+      setDashInternoFechaDesde(formatDashboardDate(monday))
+      setDashInternoFechaHasta(formatDashboardDate(sunday))
+    } else {
+      const today = new Date()
+      setDashInternoFechaDesde(formatDashboardDate(new Date(today.getFullYear(), today.getMonth(), 1)))
+      setDashInternoFechaHasta(formatDashboardDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)))
+    }
+    setDashInternoDatePreset(preset)
+  }
+  const toggleDashInternoHallazgo = (value: string) => {
+    setDashInternoFilterHallazgos(current => current.includes(value)
+      ? current.filter(item => item !== value)
+      : [...current, value])
+    setDashInternoRecordsPage(1)
+  }
+  const toggleDashInternoChartHallazgo = (value: string) => {
+    setDashInternoFilterHallazgos(current => current.length === 1 && current[0] === value ? [] : [value])
+    setDashInternoRecordsPage(1)
+  }
+  const toggleDashInternoCelda = (value: string) => {
+    setDashInternoFilterCelda(current => current === value ? '' : value)
+    setDashInternoRecordsPage(1)
+  }
+  const toggleDashInternoMatrixCell = (hallazgoValue: string, celdaValue: string) => {
+    const alreadySelected = dashInternoFilterHallazgos.length === 1 && dashInternoFilterHallazgos[0] === hallazgoValue && dashInternoFilterCelda === celdaValue
+    setDashInternoFilterHallazgos(alreadySelected ? [] : [hallazgoValue])
+    setDashInternoFilterCelda(alreadySelected ? '' : celdaValue)
+    setDashInternoRecordsPage(1)
+  }
 
   const dashInternoBase = useMemo(() => {
+    const query = normalizeDashSearch(dashInternoSearch)
     return registrosInterno.filter(r => {
       if (dashInternoFechaDesde && r.fecha < dashInternoFechaDesde) return false
       if (dashInternoFechaHasta && r.fecha > dashInternoFechaHasta) return false
+      if (dashInternoFilterHallazgos.length && !dashInternoFilterHallazgos.includes(r.hallazgo)) return false
+      if (dashInternoFilterUsuario && r.usuario !== dashInternoFilterUsuario) return false
+      if (dashInternoFilterUsuarioKitteo) {
+        const authorizedUser = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
+        if (dashInternoFilterUsuarioKitteo === UNIDENTIFIED_AUTHORIZED_FILTER ? authorizedUser !== null : authorizedUser !== dashInternoFilterUsuarioKitteo) return false
+      }
+      if (dashInternoFilterCelda && (r.celda?.trim() || 'SIN CELDA') !== dashInternoFilterCelda) return false
+      if (dashInternoFilterNoParte && (r.no_parte?.trim() || '') !== dashInternoFilterNoParte) return false
+      if (dashInternoFilterNoParteRequerido) {
+        const requiredPart = r.no_parte_requerido?.trim() || ''
+        if (dashInternoFilterNoParteRequerido === NO_REQUIRED_PART_FILTER ? requiredPart !== '' : requiredPart !== dashInternoFilterNoParteRequerido) return false
+      }
+      if (query) {
+        const searchable = normalizeDashSearch([
+          r.no_orden, r.noOrden, r.no_parte, r.noParte, r.no_parte_requerido,
+          r.nota, r.usuario, r.usuario_kitteo
+        ].join(' '))
+        if (!searchable.includes(query)) return false
+      }
       return true
     })
-  }, [registrosInterno, dashInternoFechaDesde, dashInternoFechaHasta])
+  }, [registrosInterno, dashInternoFechaDesde, dashInternoFechaHasta, dashInternoFilterHallazgos, dashInternoFilterUsuario, dashInternoFilterUsuarioKitteo, dashInternoFilterCelda, dashInternoFilterNoParte, dashInternoFilterNoParteRequerido, dashInternoSearch])
 
   const internoHallazgoParteData = useMemo(() => {
     const counts: Record<string, { hallazgo: string; no_parte: string; no_parte_requerido: string; count: number; cantidad: number }> = {}
     dashInternoBase.forEach(r => {
-      const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
-      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: r.no_parte_requerido || '', count: 0, cantidad: 0 }
+      const noParteRequerido = r.no_parte_requerido?.trim() || ''
+      const key = `${r.hallazgo}||${r.no_parte}||${noParteRequerido}`
+      if (!counts[key]) counts[key] = { hallazgo: r.hallazgo, no_parte: r.no_parte, no_parte_requerido: noParteRequerido, count: 0, cantidad: 0 }
       counts[key].count += 1
       counts[key].cantidad += r.cantidad || 0
     })
@@ -939,13 +1076,15 @@ function App() {
   }, [dashInternoBase])
 
   const internoUsuarioKitteoData = useMemo(() => {
-    const counts: Record<string, number> = {}
+    const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashInternoBase.forEach(r => {
       const uk = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
-        ?? canonicalizarUsuarioKitteo(r.usuario_kitteo)
-      counts[uk] = (counts[uk] || 0) + 1
+        ?? UNIDENTIFIED_AUTHORIZED_FILTER
+      if (!counts[uk]) counts[uk] = { registros: 0, cantidad: 0 }
+      counts[uk].registros += 1
+      counts[uk].cantidad += r.cantidad || 0
     })
-    return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
+    return Object.entries(counts).map(([name, values]) => ({ name, ...values })).sort((a, b) => b.registros - a.registros)
   }, [dashInternoBase])
 
   const internoSemanaHallazgoTypes = useMemo(() => {
@@ -985,11 +1124,40 @@ function App() {
   const internoCeldaData = useMemo(() => {
     const counts: Record<string, number> = {}
     dashInternoBase.forEach(r => {
-      const c = r.celda || 'SIN CELDA'
+      const c = r.celda?.trim() || 'SIN CELDA'
       counts[c] = (counts[c] || 0) + 1
     })
     return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   }, [dashInternoBase])
+
+  const internoMatrixData = useMemo(() => {
+    const counts: Record<string, Record<string, number>> = {}
+    dashInternoBase.forEach(r => {
+      const finding = r.hallazgo || 'SIN HALLAZGO'
+      const cell = r.celda?.trim() || 'SIN CELDA'
+      if (!counts[finding]) counts[finding] = {}
+      counts[finding][cell] = (counts[finding][cell] || 0) + 1
+    })
+    return internoHallazgoDistData.map(item => ({
+      hallazgo: item.name,
+      total: item.value,
+      celdas: internoCeldaData.map(cell => ({ name: cell.name, value: counts[item.name]?.[cell.name] || 0 }))
+    }))
+  }, [dashInternoBase, internoHallazgoDistData, internoCeldaData])
+
+  const dashInternoTotalCantidad = useMemo(() =>
+    dashInternoBase.reduce((total, r) => total + (r.cantidad || 0), 0), [dashInternoBase])
+  const dashInternoMissingAuthorized = useMemo(() =>
+    dashInternoBase.filter(r => !canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)).length,
+  [dashInternoBase])
+  const dashInternoRecordsSorted = useMemo(() =>
+    dashInternoBase.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)), [dashInternoBase])
+  const dashInternoRecordsPageCount = Math.max(1, Math.ceil(dashInternoRecordsSorted.length / DASHBOARD_RECORDS_PER_PAGE))
+  const dashInternoRecordsPageRows = dashInternoRecordsSorted.slice(
+    (dashInternoRecordsPage - 1) * DASHBOARD_RECORDS_PER_PAGE,
+    dashInternoRecordsPage * DASHBOARD_RECORDS_PER_PAGE
+  )
+  useEffect(() => { setDashInternoRecordsPage(1) }, [dashInternoBase])
 
   const internoAreaData = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -1131,6 +1299,57 @@ function App() {
     const link = document.createElement('a')
     link.href = url
     link.download = `kitteo_dashboard_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const exportDashInternoToExcel = () => {
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'Parte equivocada', 'Parte requerida', 'Cantidad', 'Usuario que registra', 'Usuario autorizado', 'Usuario que validó', 'Nota']
+    const rows = dashInternoRecordsSorted.map(r => ({
+      'Fecha': r.fecha,
+      'Área': r.area,
+      'Celda': r.celda || '',
+      'No. Orden': r.noOrden || r.no_orden || '',
+      'Hallazgo': r.hallazgo,
+      'Parte equivocada': r.noParte || r.no_parte || '',
+      'Parte requerida': r.no_parte_requerido || '',
+      'Cantidad': r.cantidad || 0,
+      'Usuario que registra': r.usuario || '',
+      'Usuario autorizado': canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD) || UNIDENTIFIED_AUTHORIZED_FILTER,
+      'Usuario que validó': r.usuario_validacion || '',
+      'Nota': r.nota || ''
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 32 }, { wch: 24 },
+      { wch: 24 }, { wch: 12 }, { wch: 20 }, { wch: 42 }, { wch: 22 }, { wch: 36 }
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dashboard interno')
+    XLSX.writeFile(workbook, `kitteo_dashboard_interno_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  const exportDashInternoToCsv = () => {
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'Parte equivocada', 'Parte requerida', 'Cantidad', 'Usuario que registra', 'Usuario autorizado', 'Usuario que validó', 'Nota']
+    const rows = dashInternoRecordsSorted.map(r => [
+      r.fecha, r.area, r.celda || '', r.noOrden || r.no_orden || '', r.hallazgo,
+      r.noParte || r.no_parte || '', r.no_parte_requerido || '', r.cantidad || 0,
+      r.usuario || '', canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD) || UNIDENTIFIED_AUTHORIZED_FILTER,
+      r.usuario_validacion || '', r.nota || ''
+    ])
+    const csvCell = (value: unknown) => {
+      const raw = String(value ?? '')
+      const safe = /^[=+\-@]/.test(raw.trimStart()) ? `'${raw}` : raw
+      return /[",;\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
+    }
+    const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `kitteo_dashboard_interno_${new Date().toISOString().split('T')[0]}.csv`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -2586,29 +2805,171 @@ function App() {
                     <BarChart2 className="w-6 h-6" /> Dashboard de Hallazgos INTERNOS
                   </h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {hasDashInternoFechaFilter
+                    {hasActiveDashInternoFilters
                       ? `Registros filtrados: ${dashInternoBase.length} de ${registrosInterno.length}`
                       : `Total de registros analizados: ${registrosInterno.length}`}
                   </p>
+                  <p className="mt-1 text-xs text-rose-700">Fuente: tabla hallazgos_interno</p>
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
-                    <input type="date" value={dashInternoFechaDesde} onChange={e => setDashInternoFechaDesde(e.target.value)}
-                      className="px-3 py-2 bg-white border border-rose-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                <div className="w-full space-y-3 xl:max-w-[78%]">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Fecha desde</label>
+                      <input type="date" value={dashInternoFechaDesde} onChange={e => { setDashInternoFechaDesde(e.target.value); setDashInternoDatePreset('custom') }}
+                        className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Fecha hasta</label>
+                      <input type="date" value={dashInternoFechaHasta} onChange={e => { setDashInternoFechaHasta(e.target.value); setDashInternoDatePreset('custom') }}
+                        className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                    </div>
+                    {hasDashInternoFechaFilter && (
+                      <button type="button" onClick={clearDashInternoFechas} className="rounded-lg bg-red-100 p-2 text-red-600 transition-colors hover:bg-red-200" title="Limpiar filtro de fechas">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                    <div className="relative min-w-[220px] flex-1">
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Filtrar por hallazgo</label>
+                      <button type="button" onClick={() => setShowDashInternoHallazgoMenu(open => !open)}
+                        aria-expanded={showDashInternoHallazgoMenu} aria-controls="dash-interno-hallazgo-options"
+                        className="flex w-full items-center gap-2 rounded-lg border border-rose-300 bg-white px-3 py-2 text-left text-sm text-gray-900 hover:bg-rose-50">
+                        <span className="min-w-0 flex-1 truncate">
+                          {dashInternoFilterHallazgos.length === 0 ? 'Todos los hallazgos'
+                            : dashInternoFilterHallazgos.length === 1 ? dashInternoFilterHallazgos[0]
+                              : `${dashInternoFilterHallazgos.length} hallazgos seleccionados`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 flex-shrink-0 text-rose-500" />
+                      </button>
+                      {showDashInternoHallazgoMenu && (
+                        <div id="dash-interno-hallazgo-options" className="absolute z-40 mt-2 w-full min-w-[280px] rounded-xl border border-rose-200 bg-white p-3 shadow-xl">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-700">Selecciona uno o varios</span>
+                            <button type="button" onClick={() => setDashInternoFilterHallazgos([])} className="text-xs font-medium text-rose-700 hover:text-rose-900">Limpiar selección</button>
+                          </div>
+                          <input type="search" value={dashInternoHallazgoSearch} onChange={e => setDashInternoHallazgoSearch(e.target.value)}
+                            placeholder="Buscar hallazgo..." className="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200" />
+                          <div className="max-h-56 overflow-y-auto">
+                            {dashInternoHallazgoOptions.filter(option => option.toLowerCase().includes(dashInternoHallazgoSearch.toLowerCase())).map(option => (
+                              <label key={option} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-rose-50">
+                                <input type="checkbox" checked={dashInternoFilterHallazgos.includes(option)} onChange={() => toggleDashInternoHallazgo(option)} className="mt-0.5 accent-rose-600" />
+                                <span>{option}</span>
+                              </label>
+                            ))}
+                            {dashInternoHallazgoOptions.filter(option => option.toLowerCase().includes(dashInternoHallazgoSearch.toLowerCase())).length === 0 && (
+                              <p className="px-2 py-4 text-center text-sm text-gray-400">No se encontraron hallazgos</p>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+                            <span className="text-xs text-gray-500">{dashInternoFilterHallazgos.length} seleccionados</span>
+                            <button type="button" onClick={() => setShowDashInternoHallazgoMenu(false)} className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">Listo</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Usuario que registra</label>
+                      <select value={dashInternoFilterUsuario} onChange={e => setDashInternoFilterUsuario(e.target.value)}
+                        className="min-w-[180px] rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400">
+                        <option value="">Todos los usuarios</option>
+                        {dashInternoUsuarioOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Usuario autorizado</label>
+                      <select value={dashInternoFilterUsuarioKitteo} onChange={e => setDashInternoFilterUsuarioKitteo(e.target.value)}
+                        className="min-w-[230px] rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400">
+                        <option value="">Todos los autorizados</option>
+                        {dashInternoUsuarioKitteoOptions.map(option => (
+                          <option key={option} value={option}>{option === UNIDENTIFIED_AUTHORIZED_FILTER ? 'Sin usuario autorizado identificable' : option}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Celda</label>
+                      <select value={dashInternoFilterCelda} onChange={e => setDashInternoFilterCelda(e.target.value)}
+                        className="min-w-[140px] rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400">
+                        <option value="">Todas las celdas</option>
+                        {dashInternoCeldaOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Parte equivocada</label>
+                      <select value={dashInternoFilterNoParte} onChange={e => setDashInternoFilterNoParte(e.target.value)}
+                        className="min-w-[190px] rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400">
+                        <option value="">Todas las partes</option>
+                        {dashInternoNoParteOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Parte requerida</label>
+                      <select value={dashInternoFilterNoParteRequerido} onChange={e => setDashInternoFilterNoParteRequerido(e.target.value)}
+                        className="min-w-[190px] rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-rose-400">
+                        <option value="">Todas las partes requeridas</option>
+                        {dashInternoNoParteRequeridoOptions.map(option => (
+                          <option key={option} value={option}>{option === NO_REQUIRED_PART_FILTER ? 'Sin parte requerida' : option}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="min-w-[240px] flex-1">
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Buscar orden, parte o nota</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input type="search" value={dashInternoSearch} onChange={e => setDashInternoSearch(e.target.value)}
+                          placeholder="Orden, parte equivocada/requerida o nota"
+                          className="w-full rounded-lg border border-rose-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200" />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
-                    <input type="date" value={dashInternoFechaHasta} onChange={e => setDashInternoFechaHasta(e.target.value)}
-                      className="px-3 py-2 bg-white border border-rose-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-rose-400" />
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Periodo:</span>
+                      {([
+                        ['week', 'Esta semana'], ['month', 'Este mes'], ['all', 'Todo']
+                      ] as const).map(([preset, label]) => (
+                        <button key={preset} type="button" onClick={() => applyDashInternoPreset(preset)} aria-pressed={dashInternoDatePreset === preset}
+                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${dashInternoDatePreset === preset ? 'bg-rose-600 text-white shadow-sm' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}>
+                          {label}
+                        </button>
+                      ))}
+                      {dashInternoDatePreset === 'custom' && <span className="text-xs text-gray-500">Rango personalizado</span>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="mr-1 text-xs text-gray-500">{dashInternoBase.length} registros para exportar</span>
+                      <button type="button" onClick={exportDashInternoToCsv} disabled={!dashInternoBase.length}
+                        className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">Exportar CSV</button>
+                      <button type="button" onClick={exportDashInternoToExcel} disabled={!dashInternoBase.length}
+                        className="rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Exportar Excel</button>
+                      <button type="button" onClick={clearDashInternoFilters} disabled={!hasActiveDashInternoFilters}
+                        className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-50">Limpiar filtros</button>
+                    </div>
                   </div>
-                  {hasDashInternoFechaFilter && (
-                    <button onClick={clearDashInternoFechas}
-                      className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors" title="Limpiar filtro de fechas">
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
+              </div>
+            </div>
+
+            {/* KPI cards del Dashboard interno */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border-l-4 border-rose-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Número de registros internos</p>
+                <p className="mt-1 text-3xl font-extrabold text-rose-700">{dashInternoBase.length}</p>
+                <p className="mt-1 text-xs text-gray-500">Capturas de hallazgos_interno con los filtros actuales</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-emerald-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Suma de piezas</p>
+                <p className="mt-1 text-3xl font-extrabold text-emerald-700">{dashInternoTotalCantidad}</p>
+                <p className="mt-1 text-xs text-gray-500">Suma del campo cantidad; no equivale a registros</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-amber-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Hallazgo interno más común</p>
+                <p className="mt-1 truncate text-xl font-extrabold text-amber-700" title={internoHallazgoDistData[0]?.name || ''}>
+                  {internoHallazgoDistData[0]?.name || 'Sin datos'}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">{internoHallazgoDistData[0] ? `${internoHallazgoDistData[0].value} registros` : '—'}</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-rose-700 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Sin usuario autorizado identificable</p>
+                <p className="mt-1 text-3xl font-extrabold text-rose-800">{dashInternoMissingAuthorized}</p>
+                <p className="mt-1 text-xs text-gray-500">Registros internos sin usuario reconocido</p>
               </div>
             </div>
 
@@ -2642,7 +3003,12 @@ function App() {
                     <Tooltip content={<CustomBarTooltip />} />
                     <Bar dataKey="count" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 12 }}>
                       {internoHallazgoParteData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={FREQ_COLORS[entry.frecuencia]} />
+                        <Cell key={`cell-${index}`} fill={FREQ_COLORS[entry.frecuencia]} cursor="pointer"
+                          onClick={() => {
+                            setDashInternoFilterHallazgos([entry.hallazgo])
+                            setDashInternoFilterNoParte(entry.no_parte)
+                            setDashInternoFilterNoParteRequerido(entry.no_parte_requerido || NO_REQUIRED_PART_FILTER)
+                          }} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -2670,8 +3036,9 @@ function App() {
                     <PieChart>
                       <Pie data={internoHallazgoDistData} cx="50%" cy="45%" outerRadius={110} dataKey="value"
                         label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
-                        {internoHallazgoDistData.map((_, index) => (
-                          <Cell key={`pie-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        {internoHallazgoDistData.map((entry, index) => (
+                          <Cell key={`pie-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} cursor="pointer"
+                            onClick={() => toggleDashInternoChartHallazgo(entry.name)} />
                         ))}
                       </Pie>
                       <Tooltip content={<CustomPieTooltip />} />
@@ -2681,20 +3048,28 @@ function App() {
                 )}
               </div>
               <div className="bg-white rounded-xl shadow-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Top usuarios autorizados (INTERNO)</h3>
-                <p className="text-sm text-gray-500 mb-4">Usuarios con más hallazgos internos registrados</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Registros y piezas por kiteador (INTERNO)</h3>
+                <p className="text-sm text-gray-500 mb-4">Selecciona una barra para filtrar por usuario autorizado</p>
                 {internoUsuarioKitteoData.length === 0 ? (
                   <div className="text-center py-10 text-gray-400">Sin datos para mostrar</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={320}>
+                  <ResponsiveContainer width="100%" height={Math.max(320, internoUsuarioKitteoData.length * 48)}>
                     <BarChart data={internoUsuarioKitteoData} layout="vertical" margin={{ top: 4, right: 40, left: 10, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                      <Tooltip formatter={(value) => [`${value} registros`, 'Total']} />
-                      <Bar dataKey="value" fill="#e11d48" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 12 }}>
-                        {internoUsuarioKitteoData.map((_, index) => (
-                          <Cell key={`uk-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      <YAxis type="category" dataKey="name" width={190} tick={renderUsuarioAutorizadoTick} />
+                      <Tooltip />
+                      <Legend formatter={(value) => <span className="text-xs text-gray-700">{value}</span>} wrapperStyle={{ fontSize: '11px' }} />
+                      <Bar dataKey="registros" name="Registros" fill="#e11d48" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }}>
+                        {internoUsuarioKitteoData.map((entry, index) => (
+                          <Cell key={`uk-registros-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} cursor="pointer"
+                            onClick={() => setDashInternoFilterUsuarioKitteo(current => current === entry.name ? '' : entry.name)} />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="cantidad" name="Piezas" fill="#10b981" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }}>
+                        {internoUsuarioKitteoData.map((entry, index) => (
+                          <Cell key={`uk-cantidad-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} cursor="pointer"
+                            onClick={() => setDashInternoFilterUsuarioKitteo(current => current === entry.name ? '' : entry.name)} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -2721,7 +3096,8 @@ function App() {
                       <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
                         formatter={(value) => value === 'cantidad' ? 'Cantidad total' : value} />
                       {internoSemanaHallazgoTypes.map((tipo, idx) => (
-                        <Bar key={tipo} dataKey={tipo} name={tipo} fill={PIE_COLORS[idx % PIE_COLORS.length]} radius={[3, 3, 0, 0]} stackId="hallazgos" />
+                        <Bar key={tipo} dataKey={tipo} name={tipo} fill={PIE_COLORS[idx % PIE_COLORS.length]} radius={[3, 3, 0, 0]} stackId="hallazgos" cursor="pointer"
+                          onClick={() => toggleDashInternoChartHallazgo(tipo)} />
                       ))}
                       <Bar dataKey="cantidad" name="cantidad" fill="#10b981" radius={[3, 3, 0, 0]} label={{ position: 'top', fontSize: 11 }} />
                     </BarChart>
@@ -2773,8 +3149,9 @@ function App() {
                         <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 13, fontWeight: 600 }} />
                         <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
                         <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
-                          {internoCeldaData.map((_, index) => (
-                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} />
+                          {internoCeldaData.map((entry, index) => (
+                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} cursor="pointer"
+                              onClick={() => toggleDashInternoCelda(entry.name)} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -2821,6 +3198,135 @@ function App() {
                     )}
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* Matriz Hallazgo × Celda (INTERNO) */}
+            <div className="rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-1 text-lg font-semibold text-gray-800">Matriz de hallazgos internos por celda</h3>
+              <p className="mb-4 text-sm text-gray-500">Cada valor representa registros de hallazgos_interno. Selecciona una celda para filtrar las gráficas y el detalle.</p>
+              {internoMatrixData.length === 0 ? (
+                <div className="py-10 text-center text-gray-400">Sin datos para mostrar</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr className="bg-rose-100 text-left text-gray-700">
+                        <th className="sticky left-0 z-10 rounded-tl-lg bg-rose-100 px-4 py-3">Hallazgo interno</th>
+                        {internoCeldaData.map(cell => (
+                          <th key={cell.name} className="whitespace-nowrap px-3 py-3 text-center">
+                            <button type="button" onClick={() => toggleDashInternoCelda(cell.name)}
+                              className={`rounded px-2 py-1 hover:bg-rose-200 ${dashInternoFilterCelda === cell.name ? 'bg-rose-600 font-semibold text-white hover:bg-rose-700' : ''}`}>
+                              {cell.name}
+                            </button>
+                          </th>
+                        ))}
+                        <th className="rounded-tr-lg px-4 py-3 text-center">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {internoMatrixData.map((row, rowIndex) => (
+                        <tr key={row.hallazgo} className={`border-b border-gray-100 ${rowIndex % 2 ? 'bg-gray-50' : 'bg-white'}`}>
+                          <th scope="row" className="sticky left-0 z-[1] bg-inherit px-4 py-2 text-left font-medium text-gray-800">
+                            <button type="button" onClick={() => toggleDashInternoChartHallazgo(row.hallazgo)}
+                              className={`rounded px-2 py-1 text-left hover:bg-rose-100 ${dashInternoFilterHallazgos.length === 1 && dashInternoFilterHallazgos[0] === row.hallazgo ? 'bg-rose-100 font-semibold text-rose-900' : ''}`}>
+                              {row.hallazgo}
+                            </button>
+                          </th>
+                          {row.celdas.map(cell => {
+                            const selected = dashInternoFilterHallazgos.length === 1 && dashInternoFilterHallazgos[0] === row.hallazgo && dashInternoFilterCelda === cell.name
+                            return (
+                              <td key={cell.name} className="px-3 py-2 text-center">
+                                {cell.value > 0 ? (
+                                  <button type="button" onClick={() => toggleDashInternoMatrixCell(row.hallazgo, cell.name)}
+                                    aria-pressed={selected} aria-label={`Filtrar ${row.hallazgo}, celda ${cell.name}: ${cell.value} registros internos`}
+                                    className={`min-w-9 rounded-md px-2 py-1 font-semibold transition-colors ${selected ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-800 hover:bg-rose-200'}`}>
+                                    {cell.value}
+                                  </button>
+                                ) : <span className="text-gray-300">—</span>}
+                              </td>
+                            )
+                          })}
+                          <td className="px-4 py-2 text-center font-bold text-gray-800">{row.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-gray-500">La matriz incluye todos los hallazgos dentro de los filtros actuales. Pulsa de nuevo para quitar una selección.</p>
+            </div>
+
+            {/* Registros individuales filtrados (INTERNO) */}
+            <div className="rounded-xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">Registros internos filtrados</h3>
+                  <p className="mt-1 text-sm text-gray-500">Filas individuales cargadas desde hallazgos_interno; todos los filtros y selecciones de gráficas se aplican aquí.</p>
+                </div>
+                <span className="rounded-full bg-rose-50 px-3 py-1 text-sm font-semibold text-rose-800">{dashInternoRecordsSorted.length} registros</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-rose-100 text-left text-gray-700">
+                      <th className="whitespace-nowrap rounded-tl-lg px-3 py-3">Fecha</th>
+                      <th className="px-3 py-3">Área</th>
+                      <th className="px-3 py-3">Celda</th>
+                      <th className="px-3 py-3">Orden</th>
+                      <th className="px-3 py-3">Hallazgo</th>
+                      <th className="px-3 py-3">Parte equivocada</th>
+                      <th className="px-3 py-3">Parte requerida</th>
+                      <th className="px-3 py-3 text-center">Cantidad</th>
+                      <th className="px-3 py-3">Usuario que registra</th>
+                      <th className="px-3 py-3">Kiteador autorizado</th>
+                      <th className="px-3 py-3">Usuario que validó</th>
+                      <th className="rounded-tr-lg px-3 py-3">Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashInternoRecordsPageRows.map((r, index) => {
+                      const autorizado = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
+                      return (
+                        <tr key={r.id || `${r.fecha}-${r.no_orden}-${index}`} className={`border-b border-gray-100 align-top ${index % 2 ? 'bg-gray-50' : 'bg-white'}`}>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.fecha}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.area || '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.celda?.trim() || 'SIN CELDA'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-800">{r.noOrden || r.no_orden || '—'}</td>
+                          <td className="min-w-[180px] px-3 py-2">
+                            <button type="button" onClick={() => toggleDashInternoChartHallazgo(r.hallazgo)} className="rounded bg-rose-50 px-2 py-1 text-left text-xs font-medium text-rose-900 hover:bg-rose-100">{r.hallazgo}</button>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.noParte || r.no_parte || '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.no_parte_requerido || '—'}</td>
+                          <td className="px-3 py-2 text-center font-semibold text-emerald-700">{r.cantidad || 0}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.usuario || '—'}</td>
+                          <td className="min-w-[180px] px-3 py-2">
+                            {autorizado
+                              ? <button type="button" onClick={() => setDashInternoFilterUsuarioKitteo(current => current === autorizado ? '' : autorizado)} className="rounded bg-indigo-50 px-2 py-1 text-left text-xs font-medium text-indigo-800 hover:bg-indigo-100">{autorizado}</button>
+                              : <button type="button" onClick={() => setDashInternoFilterUsuarioKitteo(current => current === UNIDENTIFIED_AUTHORIZED_FILTER ? '' : UNIDENTIFIED_AUTHORIZED_FILTER)} className="rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100">No identificable</button>}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.usuario_validacion || '—'}</td>
+                          <td className="min-w-[180px] max-w-[320px] break-words px-3 py-2 text-gray-700">{r.nota || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                    {dashInternoRecordsSorted.length === 0 && (
+                      <tr><td colSpan={12} className="py-10 text-center text-gray-400">No hay registros internos que coincidan con los filtros actuales.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <p className="text-sm text-gray-600">
+                  Mostrando {dashInternoRecordsSorted.length === 0 ? 0 : (dashInternoRecordsPage - 1) * DASHBOARD_RECORDS_PER_PAGE + 1}–{Math.min(dashInternoRecordsPage * DASHBOARD_RECORDS_PER_PAGE, dashInternoRecordsSorted.length)} de {dashInternoRecordsSorted.length}
+                </p>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setDashInternoRecordsPage(page => Math.max(1, page - 1))} disabled={dashInternoRecordsPage <= 1}
+                    aria-label="Página anterior de registros internos" className="rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+                  <span className="text-sm text-gray-600">Página {dashInternoRecordsPage} de {dashInternoRecordsPageCount}</span>
+                  <button type="button" onClick={() => setDashInternoRecordsPage(page => Math.min(dashInternoRecordsPageCount, page + 1))} disabled={dashInternoRecordsPage >= dashInternoRecordsPageCount}
+                    aria-label="Página siguiente de registros internos" className="rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+                </div>
               </div>
             </div>
 
