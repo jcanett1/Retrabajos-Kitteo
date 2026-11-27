@@ -164,6 +164,23 @@ const CELDA_OPTIONS = [
 
 const RECORDS_PER_PAGE = 100
 const PARTS_PER_PAGE = 100
+const DASHBOARD_RECORDS_PER_PAGE = 25
+const NO_REQUIRED_PART_FILTER = '__NO_REQUIRED_PART__'
+const UNIDENTIFIED_AUTHORIZED_FILTER = 'Sin usuario autorizado identificable'
+
+const normalizeDashSearch = (value: unknown): string => String(value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('es-MX')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const formatDashboardDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const SUPABASE_FETCH_PAGE_SIZE = 500
 
@@ -284,11 +301,16 @@ function App() {
   // Dashboard filter state
   const [dashFilterNoParte, setDashFilterNoParte] = useState('')
   const [dashFilterNoParteInput, setDashFilterNoParteInput] = useState('')
+  const [dashFilterNoParteRequerido, setDashFilterNoParteRequerido] = useState('')
   const [dashFilterHallazgos, setDashFilterHallazgos] = useState<string[]>([])
   const [showDashHallazgoMenu, setShowDashHallazgoMenu] = useState(false)
   const [dashHallazgoSearch, setDashHallazgoSearch] = useState('')
   const [dashFilterUsuario, setDashFilterUsuario] = useState('')
   const [dashFilterUsuarioKitteo, setDashFilterUsuarioKitteo] = useState('')
+  const [dashFilterCelda, setDashFilterCelda] = useState('')
+  const [dashSearch, setDashSearch] = useState('')
+  const [dashDatePreset, setDashDatePreset] = useState<'week' | 'month' | 'all' | 'custom'>('all')
+  const [dashRecordsPage, setDashRecordsPage] = useState(1)
   const [expandedDetailKey, setExpandedDetailKey] = useState<string | null>(null)
   const [showDashPartsModal, setShowDashPartsModal] = useState(false)
   const [dashModalSearch, setDashModalSearch] = useState('')
@@ -555,38 +577,82 @@ function App() {
     Array.from(new Set<string>(registros.map(r => r.usuario).filter(value => Boolean(value)))).sort((a, b) => a.localeCompare(b, 'es')),
   [registros])
 
-  const dashUsuarioKitteoOptions = useMemo(() =>
-    Array.from(new Set<string>(registros
+  const dashUsuarioKitteoOptions = useMemo(() => {
+    const recognized = registros
       .map(r => canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD))
-      .filter((value): value is string => value !== null)))
-      .sort((a, b) => a.localeCompare(b, 'es')),
+      .filter((value): value is string => value !== null)
+    const hasUnidentified = registros.some(r =>
+      !canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD))
+    const options = [...recognized, ...(hasUnidentified ? [UNIDENTIFIED_AUTHORIZED_FILTER] : [])]
+    return Array.from(new Set(options)).sort((a, b) => {
+      if (a === UNIDENTIFIED_AUTHORIZED_FILTER) return 1
+      if (b === UNIDENTIFIED_AUTHORIZED_FILTER) return -1
+      return a.localeCompare(b, 'es')
+    })
+  }, [registros])
+
+  const dashNoParteRequeridoOptions = useMemo(() => {
+    const values = registros.map(r => r.no_parte_requerido?.trim() || '')
+    const options = values.filter((value): value is string => value.length > 0)
+    if (values.some(value => value.length === 0)) options.push(NO_REQUIRED_PART_FILTER)
+    return Array.from(new Set<string>(options)).sort((a, b) => {
+      if (a === NO_REQUIRED_PART_FILTER) return 1
+      if (b === NO_REQUIRED_PART_FILTER) return -1
+      return a.localeCompare(b, 'es', { numeric: true })
+    })
+  }, [registros])
+
+  const dashCeldaOptions = useMemo(() =>
+    Array.from(new Set<string>(registros.map(r => r.celda?.trim() || 'SIN CELDA')))
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
   [registros])
 
   // Base dataset for dashboard; all filters apply to charts and detail.
   const dashBase = useMemo(() => {
+    const query = normalizeDashSearch(dashSearch)
     return registros.filter(r => {
       if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
+      if (dashFilterNoParteRequerido) {
+        const requiredPart = r.no_parte_requerido?.trim() || ''
+        if (dashFilterNoParteRequerido === NO_REQUIRED_PART_FILTER ? requiredPart !== '' : requiredPart !== dashFilterNoParteRequerido) return false
+      }
       if (dashFilterHallazgos.length > 0 && !dashFilterHallazgos.includes(r.hallazgo)) return false
       if (dashFilterUsuario && r.usuario !== dashFilterUsuario) return false
-      if (dashFilterUsuarioKitteo && canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD) !== dashFilterUsuarioKitteo) return false
+      if (dashFilterUsuarioKitteo) {
+        const authorizedUser = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
+        if (dashFilterUsuarioKitteo === UNIDENTIFIED_AUTHORIZED_FILTER ? authorizedUser !== null : authorizedUser !== dashFilterUsuarioKitteo) return false
+      }
+      if (dashFilterCelda && (r.celda?.trim() || 'SIN CELDA') !== dashFilterCelda) return false
       if (dashFechaDesde && r.fecha < dashFechaDesde) return false
       if (dashFechaHasta && r.fecha > dashFechaHasta) return false
+      if (query) {
+        const searchable = normalizeDashSearch([
+          r.no_orden, r.noOrden, r.no_parte, r.noParte, r.no_parte_requerido,
+          r.nota, r.usuario, r.usuario_kitteo
+        ].join(' '))
+        if (!searchable.includes(query)) return false
+      }
       return true
     })
-  }, [registros, dashFilterNoParte, dashFilterHallazgos, dashFilterUsuario, dashFilterUsuarioKitteo, dashFechaDesde, dashFechaHasta])
+  }, [registros, dashFilterNoParte, dashFilterNoParteRequerido, dashFilterHallazgos, dashFilterUsuario, dashFilterUsuarioKitteo, dashFilterCelda, dashSearch, dashFechaDesde, dashFechaHasta])
 
   const hasDashFechaFilter = dashFechaDesde || dashFechaHasta
-  const hasActiveDashFilters = Boolean(dashFilterNoParte || dashFilterHallazgos.length > 0 || dashFilterUsuario || dashFilterUsuarioKitteo || hasDashFechaFilter)
+  const hasActiveDashFilters = Boolean(dashFilterNoParte || dashFilterNoParteRequerido || dashFilterHallazgos.length > 0 || dashFilterUsuario || dashFilterUsuarioKitteo || dashFilterCelda || dashSearch.trim() || hasDashFechaFilter)
   const clearDashFilters = () => {
     setDashFilterNoParte('')
     setDashFilterNoParteInput('')
+    setDashFilterNoParteRequerido('')
     setDashFilterHallazgos([])
     setShowDashHallazgoMenu(false)
     setDashHallazgoSearch('')
     setDashFilterUsuario('')
     setDashFilterUsuarioKitteo('')
+    setDashFilterCelda('')
+    setDashSearch('')
     setDashFechaDesde('')
     setDashFechaHasta('')
+    setDashDatePreset('all')
+    setDashRecordsPage(1)
     setExpandedDetailKey(null)
   }
   const toggleDashHallazgo = (hallazgo: string) => {
@@ -597,13 +663,53 @@ function App() {
   const dashFilterSummary = [
     dashFilterHallazgos.length > 0 ? `Hallazgos: ${dashFilterHallazgos.join(', ')}` : '',
     dashFilterNoParte ? `No. de Parte: ${dashFilterNoParte}` : '',
+    dashFilterNoParteRequerido ? `Parte requerida: ${dashFilterNoParteRequerido === NO_REQUIRED_PART_FILTER ? 'Sin parte requerida' : dashFilterNoParteRequerido}` : '',
     dashFilterUsuario ? `Usuario que registra: ${dashFilterUsuario}` : '',
-    dashFilterUsuarioKitteo ? `Usuario autorizado: ${dashFilterUsuarioKitteo}` : '',
+    dashFilterUsuarioKitteo ? `Usuario autorizado: ${dashFilterUsuarioKitteo === UNIDENTIFIED_AUTHORIZED_FILTER ? 'Sin usuario identificable' : dashFilterUsuarioKitteo}` : '',
+    dashFilterCelda ? `Celda: ${dashFilterCelda}` : '',
+    dashSearch.trim() ? `Búsqueda: “${dashSearch.trim()}”` : '',
     dashFechaDesde && dashFechaHasta ? `Fechas: ${dashFechaDesde} a ${dashFechaHasta}`
       : dashFechaDesde ? `Desde ${dashFechaDesde}`
       : dashFechaHasta ? `Hasta ${dashFechaHasta}` : ''
   ].filter(value => value.length > 0).join(' · ') || 'Todos los registros'
-  const clearDashFechas = () => { setDashFechaDesde(''); setDashFechaHasta('') }
+  const clearDashFechas = () => { setDashFechaDesde(''); setDashFechaHasta(''); setDashDatePreset('all') }
+  const applyDashPreset = (preset: 'week' | 'month' | 'all') => {
+    if (preset === 'all') {
+      setDashFechaDesde('')
+      setDashFechaHasta('')
+    } else if (preset === 'week') {
+      const monday = new Date()
+      monday.setHours(0, 0, 0, 0)
+      const day = monday.getDay() || 7
+      monday.setDate(monday.getDate() - day + 1)
+      const sunday = new Date(monday)
+      sunday.setDate(sunday.getDate() + 6)
+      setDashFechaDesde(formatDashboardDate(monday))
+      setDashFechaHasta(formatDashboardDate(sunday))
+    } else {
+      const today = new Date()
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      setDashFechaDesde(formatDashboardDate(firstDay))
+      setDashFechaHasta(formatDashboardDate(lastDay))
+    }
+    setDashDatePreset(preset)
+  }
+
+  const toggleDashHallazgoFilter = (hallazgo: string) => {
+    setDashFilterHallazgos(current => current.length === 1 && current[0] === hallazgo ? [] : [hallazgo])
+    setDashRecordsPage(1)
+  }
+  const toggleDashCeldaFilter = (celda: string) => {
+    setDashFilterCelda(current => current === celda ? '' : celda)
+    setDashRecordsPage(1)
+  }
+  const toggleDashMatrixCell = (hallazgo: string, celda: string) => {
+    const alreadySelected = dashFilterHallazgos.length === 1 && dashFilterHallazgos[0] === hallazgo && dashFilterCelda === celda
+    setDashFilterHallazgos(alreadySelected ? [] : [hallazgo])
+    setDashFilterCelda(alreadySelected ? '' : celda)
+    setDashRecordsPage(1)
+  }
 
   // 1. Hallazgo + No. de Parte combinados con frecuencia
   const hallazgoParteData = useMemo(() => {
@@ -617,12 +723,13 @@ function App() {
       registradores: Record<string, { nombre: string; veces: number; cantidad: number }>
     }> = {}
     dashBase.forEach(r => {
-      const key = `${r.hallazgo}||${r.no_parte}||${r.no_parte_requerido || ''}`
+      const requiredPart = r.no_parte_requerido?.trim() || ''
+      const key = `${r.hallazgo}||${r.no_parte}||${requiredPart}`
       if (!counts[key]) counts[key] = {
         key,
         hallazgo: r.hallazgo,
         no_parte: r.no_parte,
-        no_parte_requerido: r.no_parte_requerido || '',
+        no_parte_requerido: requiredPart,
         count: 0,
         cantidad: 0,
         registradores: {}
@@ -668,7 +775,7 @@ function App() {
     const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashBase.forEach(r => {
       const uk = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
-        ?? canonicalizarUsuarioKitteo(r.usuario_kitteo)
+        ?? UNIDENTIFIED_AUTHORIZED_FILTER
       if (!counts[uk]) counts[uk] = { registros: 0, cantidad: 0 }
       counts[uk].registros += 1
       counts[uk].cantidad += r.cantidad || 0
@@ -703,14 +810,17 @@ function App() {
 
   // Construir datos agrupados por semana con una clave por tipo de hallazgo
   const semanaData = useMemo(() => {
-    const weeks: Record<string, Record<string, number> & { semana: string; cantidad: number }> = {}
+    const weeks: Record<string, { [key: string]: string | number; semana: string; cantidad: number }> = {}
     semanaBase.forEach(r => {
       const semana = getISOWeek(r.fecha)
       if (!weeks[semana]) {
         weeks[semana] = { semana, cantidad: 0 }
         semanaHallazgoTypes.forEach(t => { weeks[semana][t] = 0 })
       }
-      if (r.hallazgo) weeks[semana][r.hallazgo] = (weeks[semana][r.hallazgo] || 0) + 1
+      if (r.hallazgo) {
+        const currentCount = weeks[semana][r.hallazgo]
+        weeks[semana][r.hallazgo] = (typeof currentCount === 'number' ? currentCount : 0) + 1
+      }
       weeks[semana].cantidad += r.cantidad || 0
     })
     return Object.values(weeks).sort((a, b) => a.semana.localeCompare(b.semana))
@@ -736,13 +846,41 @@ function App() {
   const celdaData = useMemo(() => {
     const counts: Record<string, number> = {}
     dashBase.forEach(r => {
-      const c = r.celda || 'SIN CELDA'
+      const c = r.celda?.trim() || 'SIN CELDA'
       counts[c] = (counts[c] || 0) + 1
     })
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
   }, [dashBase])
+
+  const matrixData = useMemo(() => {
+    const counts: Record<string, Record<string, number>> = {}
+    dashBase.forEach(r => {
+      const finding = r.hallazgo || 'SIN HALLAZGO'
+      const cell = r.celda?.trim() || 'SIN CELDA'
+      if (!counts[finding]) counts[finding] = {}
+      counts[finding][cell] = (counts[finding][cell] || 0) + 1
+    })
+    return hallazgoDistData.map(item => ({
+      hallazgo: item.name,
+      total: item.value,
+      celdas: celdaData.map(cell => ({ name: cell.name, value: counts[item.name]?.[cell.name] || 0 }))
+    }))
+  }, [dashBase, hallazgoDistData, celdaData])
+
+  const dashTotalQuantity = useMemo(() => dashBase.reduce((total, r) => total + (r.cantidad || 0), 0), [dashBase])
+  const dashMissingAuthorized = useMemo(() => dashBase.filter(r =>
+    !canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
+  ).length, [dashBase])
+  const dashRecordsSorted = useMemo(() => dashBase.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)), [dashBase])
+  const dashRecordsPageCount = Math.max(1, Math.ceil(dashRecordsSorted.length / DASHBOARD_RECORDS_PER_PAGE))
+  const dashRecordsPageRows = dashRecordsSorted.slice(
+    (dashRecordsPage - 1) * DASHBOARD_RECORDS_PER_PAGE,
+    dashRecordsPage * DASHBOARD_RECORDS_PER_PAGE
+  )
+
+  useEffect(() => { setDashRecordsPage(1) }, [dashBase])
 
   // 6. Hallazgos por Área
   const areaData = useMemo(() => {
@@ -817,14 +955,17 @@ function App() {
   }, [dashInternoBase])
 
   const internoSemanaData = useMemo(() => {
-    const weeks: Record<string, Record<string, number> & { semana: string; cantidad: number }> = {}
+    const weeks: Record<string, { [key: string]: string | number; semana: string; cantidad: number }> = {}
     dashInternoBase.forEach(r => {
       const semana = getISOWeek(r.fecha)
       if (!weeks[semana]) {
         weeks[semana] = { semana, cantidad: 0 }
         internoSemanaHallazgoTypes.forEach(t => { weeks[semana][t] = 0 })
       }
-      if (r.hallazgo) weeks[semana][r.hallazgo] = (weeks[semana][r.hallazgo] || 0) + 1
+      if (r.hallazgo) {
+        const currentCount = weeks[semana][r.hallazgo]
+        weeks[semana][r.hallazgo] = (typeof currentCount === 'number' ? currentCount : 0) + 1
+      }
       weeks[semana].cantidad += r.cantidad || 0
     })
     return Object.values(weeks).sort((a, b) => a.semana.localeCompare(b.semana))
@@ -945,6 +1086,55 @@ function App() {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Hallazgos')
     XLSX.writeFile(workbook, `kitteo_hallazgos_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  const exportDashboardToExcel = () => {
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario autorizado', 'Nota']
+    const rows = dashRecordsSorted.map(r => ({
+      'Fecha': r.fecha,
+      'Área': r.area,
+      'Celda': r.celda || '',
+      'No. Orden': r.noOrden || r.no_orden || '',
+      'Hallazgo': r.hallazgo,
+      'No. de Parte': r.noParte || r.no_parte || '',
+      'No. de Parte Requerido': r.no_parte_requerido || '',
+      'Cantidad': r.cantidad || 0,
+      'Usuario': r.usuario || '',
+      'Usuario autorizado': canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD) || UNIDENTIFIED_AUTHORIZED_FILTER,
+      'Nota': r.nota || ''
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 32 },
+      { wch: 24 }, { wch: 24 }, { wch: 12 }, { wch: 18 }, { wch: 42 }, { wch: 36 }
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dashboard filtrado')
+    XLSX.writeFile(workbook, `kitteo_dashboard_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  const exportDashboardToCsv = () => {
+    const headers = ['Fecha', 'Área', 'Celda', 'No. Orden', 'Hallazgo', 'No. de Parte', 'No. de Parte Requerido', 'Cantidad', 'Usuario', 'Usuario autorizado', 'Nota']
+    const rows = dashRecordsSorted.map(r => [
+      r.fecha, r.area, r.celda || '', r.noOrden || r.no_orden || '', r.hallazgo,
+      r.noParte || r.no_parte || '', r.no_parte_requerido || '', r.cantidad || 0,
+      r.usuario || '', canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD) || UNIDENTIFIED_AUTHORIZED_FILTER, r.nota || ''
+    ])
+    const csvCell = (value: unknown) => {
+      const raw = String(value ?? '')
+      const safe = /^[=+\-@]/.test(raw.trimStart()) ? `'${raw}` : raw
+      return /[",;\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
+    }
+    const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `kitteo_dashboard_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -1344,7 +1534,7 @@ function App() {
                       <input
                         type="date"
                         value={dashFechaDesde}
-                        onChange={e => setDashFechaDesde(e.target.value)}
+                        onChange={e => { setDashFechaDesde(e.target.value); setDashDatePreset('custom') }}
                         className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
                       />
                     </div>
@@ -1353,7 +1543,7 @@ function App() {
                       <input
                         type="date"
                         value={dashFechaHasta}
-                        onChange={e => setDashFechaHasta(e.target.value)}
+                        onChange={e => { setDashFechaHasta(e.target.value); setDashDatePreset('custom') }}
                         className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400"
                       />
                     </div>
@@ -1435,7 +1625,20 @@ function App() {
                     <select value={dashFilterUsuarioKitteo} onChange={e => setDashFilterUsuarioKitteo(e.target.value)}
                       className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[260px]">
                       <option value="">Todos los usuarios autorizados</option>
-                      {dashUsuarioKitteoOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                      {dashUsuarioKitteoOptions.map(option => (
+                        <option key={option} value={option}>
+                          {option === UNIDENTIFIED_AUTHORIZED_FILTER ? 'Sin usuario autorizado identificable' : option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Filtro por celda */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Celda</label>
+                    <select value={dashFilterCelda} onChange={e => setDashFilterCelda(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[150px]">
+                      <option value="">Todas las celdas</option>
+                      {dashCeldaOptions.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </div>
                   {/* Filtro por No. de Parte */}
@@ -1457,19 +1660,94 @@ function App() {
                       </button>
                     )}
                   </div>
-                  {hasActiveDashFilters && (
-                    <button type="button" onClick={clearDashFilters}
-                      className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors">
-                      Limpiar filtros
-                    </button>
-                  )}
+                  {/* Filtro por parte requerida */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Parte requerida</label>
+                    <select value={dashFilterNoParteRequerido} onChange={e => setDashFilterNoParteRequerido(e.target.value)}
+                      className="px-3 py-2 bg-white border border-indigo-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-400 min-w-[210px]">
+                      <option value="">Todas las partes requeridas</option>
+                      {dashNoParteRequeridoOptions.map(option => (
+                        <option key={option} value={option}>
+                          {option === NO_REQUIRED_PART_FILTER ? 'Sin parte requerida' : option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Búsqueda de texto libre sobre orden, partes y nota */}
+                  <div className="min-w-[240px] flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Buscar registros</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input type="search" value={dashSearch} onChange={e => setDashSearch(e.target.value)}
+                        placeholder="Orden, parte equivocada/requerida o nota"
+                        className="w-full rounded-lg border border-indigo-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                    </div>
+                  </div>
                 </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Periodo:</span>
+                  {([
+                    ['week', 'Esta semana'],
+                    ['month', 'Este mes'],
+                    ['all', 'Todo']
+                  ] as const).map(([preset, label]) => (
+                    <button key={preset} type="button" onClick={() => applyDashPreset(preset)}
+                      aria-pressed={dashDatePreset === preset}
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${dashDatePreset === preset ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}>
+                      {label}
+                    </button>
+                  ))}
+                  {dashDatePreset === 'custom' && <span className="text-xs text-gray-500">Rango personalizado</span>}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-1 text-xs text-gray-500">{dashBase.length} registros para exportar</span>
+                  <button type="button" onClick={exportDashboardToCsv} disabled={dashBase.length === 0}
+                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">
+                    Exportar CSV
+                  </button>
+                  <button type="button" onClick={exportDashboardToExcel} disabled={dashBase.length === 0}
+                    className="rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    Exportar Excel
+                  </button>
+                  <button type="button" onClick={clearDashFilters} disabled={!hasActiveDashFilters}
+                    className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-50">
+                    Limpiar filtros
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── KPI cards ── */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border-l-4 border-indigo-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Número de registros</p>
+                <p className="mt-1 text-3xl font-extrabold text-indigo-700">{dashBase.length}</p>
+                <p className="mt-1 text-xs text-gray-500">Capturas dentro del filtro actual</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-emerald-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Suma de piezas</p>
+                <p className="mt-1 text-3xl font-extrabold text-emerald-700">{dashTotalQuantity}</p>
+                <p className="mt-1 text-xs text-gray-500">Suma del campo cantidad; no equivale a registros</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-amber-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Hallazgo más común</p>
+                <p className="mt-1 truncate text-xl font-extrabold text-amber-700" title={hallazgoDistData[0]?.name || ''}>
+                  {hallazgoDistData[0]?.name || 'Sin datos'}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">{hallazgoDistData[0] ? `${hallazgoDistData[0].value} registros` : '—'}</p>
+              </div>
+              <div className="rounded-xl border-l-4 border-rose-500 bg-white p-5 shadow">
+                <p className="text-sm font-medium text-gray-500">Sin usuario autorizado identificable</p>
+                <p className="mt-1 text-3xl font-extrabold text-rose-700">{dashMissingAuthorized}</p>
+                <p className="mt-1 text-xs text-gray-500">Registros no asociados a un usuario reconocido</p>
               </div>
             </div>
 
             {/* ── Summary cards ── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {Object.entries(freqSummary).map(([label, count]) => (
+              {(Object.entries(freqSummary) as [string, number][]).map(([label, count]) => (
                 <div key={label} className="bg-white rounded-xl shadow p-5 flex items-center gap-4 border-l-4"
                   style={{ borderColor: FREQ_COLORS[label] }}>
                   <div className="flex-1">
@@ -1513,7 +1791,13 @@ function App() {
                     <Tooltip content={<CustomBarTooltip />} />
                     <Bar dataKey="count" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 12 }}>
                       {hallazgoParteData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={FREQ_COLORS[entry.frecuencia]} />
+                        <Cell key={`cell-${index}`} fill={FREQ_COLORS[entry.frecuencia]} cursor="pointer"
+                          onClick={() => {
+                            setDashFilterHallazgos([entry.hallazgo])
+                            setDashFilterNoParte(entry.no_parte)
+                            setDashFilterNoParteInput(entry.no_parte)
+                            setDashFilterNoParteRequerido(entry.no_parte_requerido || NO_REQUIRED_PART_FILTER)
+                          }} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -1550,8 +1834,9 @@ function App() {
                         label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
-                        {hallazgoDistData.map((_, index) => (
-                          <Cell key={`pie-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        {hallazgoDistData.map((entry, index) => (
+                          <Cell key={`pie-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} cursor="pointer"
+                            onClick={() => toggleDashHallazgoFilter(entry.name)} />
                         ))}
                       </Pie>
                       <Tooltip content={<CustomPieTooltip />} />
@@ -1583,8 +1868,26 @@ function App() {
                       <YAxis type="category" dataKey="name" width={185} tick={renderUsuarioAutorizadoTick} />
                       <Tooltip />
                       <Legend formatter={(value) => <span className="text-xs text-gray-700">{value}</span>} wrapperStyle={{ fontSize: '11px' }} />
-                      <Bar dataKey="registros" name="Registros" fill="#6366f1" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }} />
-                      <Bar dataKey="cantidad" name="Unidades" fill="#10b981" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }} />
+                      <Bar dataKey="registros" name="Registros" fill="#6366f1" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }}>
+                        {usuarioKitteoData.map((entry, index) => (
+                          <Cell key={`kiteador-registros-${index}`} cursor={dashUsuarioKitteoOptions.includes(entry.name) ? 'pointer' : 'default'}
+                            onClick={() => {
+                              if (dashUsuarioKitteoOptions.includes(entry.name)) {
+                                setDashFilterUsuarioKitteo(current => current === entry.name ? '' : entry.name)
+                              }
+                            }} />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="cantidad" name="Piezas" fill="#10b981" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11 }}>
+                        {usuarioKitteoData.map((entry, index) => (
+                          <Cell key={`kiteador-piezas-${index}`} cursor={dashUsuarioKitteoOptions.includes(entry.name) ? 'pointer' : 'default'}
+                            onClick={() => {
+                              if (dashUsuarioKitteoOptions.includes(entry.name)) {
+                                setDashFilterUsuarioKitteo(current => current === entry.name ? '' : entry.name)
+                              }
+                            }} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -1634,6 +1937,8 @@ function App() {
                           fill={PIE_COLORS[idx % PIE_COLORS.length]}
                           radius={[3, 3, 0, 0]}
                           stackId="hallazgos"
+                          cursor="pointer"
+                          onClick={() => toggleDashHallazgoFilter(tipo)}
                         />
                       ))}
                       <Bar
@@ -1707,8 +2012,9 @@ function App() {
                         <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 13, fontWeight: 600 }} />
                         <Tooltip formatter={(value) => [`${value} hallazgos`, 'Total']} />
                         <Bar dataKey="value" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 13, fontWeight: 700 }}>
-                          {celdaData.map((_, index) => (
-                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} />
+                          {celdaData.map((entry, index) => (
+                            <Cell key={`celda-${index}`} fill={['#f97316','#fb923c','#fdba74','#fed7aa','#ffedd5'][index % 5]} cursor="pointer"
+                              onClick={() => toggleDashCeldaFilter(entry.name)} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -1763,6 +2069,142 @@ function App() {
                     )}
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* ── Matrix: Hallazgo × Celda ── */}
+            <div className="rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-1 text-lg font-semibold text-gray-800">Matriz de hallazgos por celda</h3>
+              <p className="mb-4 text-sm text-gray-500">Cada valor es el número de registros. Selecciona una celda de la matriz para filtrar el Dashboard y el detalle.</p>
+              {matrixData.length === 0 ? (
+                <div className="py-10 text-center text-gray-400">Sin datos para mostrar</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left text-gray-700">
+                        <th className="sticky left-0 z-10 rounded-tl-lg bg-gray-100 px-4 py-3">Hallazgo</th>
+                        {celdaData.map(cell => (
+                          <th key={cell.name} className="whitespace-nowrap px-3 py-3 text-center">
+                            <button type="button" onClick={() => toggleDashCeldaFilter(cell.name)}
+                              className={`rounded px-2 py-1 hover:bg-indigo-100 ${dashFilterCelda === cell.name ? 'bg-indigo-600 font-semibold text-white hover:bg-indigo-700' : ''}`}>
+                              {cell.name}
+                            </button>
+                          </th>
+                        ))}
+                        <th className="rounded-tr-lg px-4 py-3 text-center">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {matrixData.map((row, rowIndex) => (
+                        <tr key={row.hallazgo} className={`border-b border-gray-100 ${rowIndex % 2 ? 'bg-gray-50' : 'bg-white'}`}>
+                          <th scope="row" className="sticky left-0 z-[1] bg-inherit px-4 py-2 text-left font-medium text-gray-800">
+                            <button type="button" onClick={() => toggleDashHallazgoFilter(row.hallazgo)}
+                              className={`rounded px-2 py-1 text-left hover:bg-amber-100 ${dashFilterHallazgos.length === 1 && dashFilterHallazgos[0] === row.hallazgo ? 'bg-amber-100 font-semibold text-amber-900' : ''}`}>
+                              {row.hallazgo}
+                            </button>
+                          </th>
+                          {row.celdas.map(cell => {
+                            const selected = dashFilterHallazgos.length === 1 && dashFilterHallazgos[0] === row.hallazgo && dashFilterCelda === cell.name
+                            return (
+                              <td key={cell.name} className="px-3 py-2 text-center">
+                                {cell.value > 0 ? (
+                                  <button type="button" onClick={() => toggleDashMatrixCell(row.hallazgo, cell.name)}
+                                    aria-pressed={selected} aria-label={`Filtrar ${row.hallazgo}, celda ${cell.name}: ${cell.value} registros`}
+                                    className={`min-w-9 rounded-md px-2 py-1 font-semibold transition-colors ${selected ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-200'}`}>
+                                    {cell.value}
+                                  </button>
+                                ) : <span className="text-gray-300">—</span>}
+                              </td>
+                            )
+                          })}
+                          <td className="px-4 py-2 text-center font-bold text-gray-800">{row.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-gray-500">La matriz incluye todos los hallazgos del filtro actual. Para quitar la selección, vuelve a pulsar la celda o usa “Limpiar filtros”.</p>
+            </div>
+
+            {/* ── Individual filtered records ── */}
+            <div className="rounded-xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">Registros individuales filtrados</h3>
+                  <p className="mt-1 text-sm text-gray-500">Cada fila es una captura; la búsqueda, los filtros y las selecciones de gráficas se aplican aquí.</p>
+                </div>
+                <span className="rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-800">{dashRecordsSorted.length} registros</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 text-left text-gray-700">
+                      <th className="whitespace-nowrap rounded-tl-lg px-3 py-3">Fecha</th>
+                      <th className="px-3 py-3">Área</th>
+                      <th className="px-3 py-3">Celda</th>
+                      <th className="px-3 py-3">Orden</th>
+                      <th className="px-3 py-3">Hallazgo</th>
+                      <th className="px-3 py-3">Parte equivocada</th>
+                      <th className="px-3 py-3">Parte requerida</th>
+                      <th className="px-3 py-3 text-center">Cantidad</th>
+                      <th className="px-3 py-3">Usuario que registra</th>
+                      <th className="px-3 py-3">Kiteador autorizado</th>
+                      <th className="rounded-tr-lg px-3 py-3">Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashRecordsPageRows.map((r, index) => {
+                      const autorizado = canonicalizarUsuarioAutorizadoKitteo(r.usuario_kitteo, USUARIOS_AUTORIZADOS_PERSONAS, USUARIOS_HISTORICOS_DASHBOARD)
+                      return (
+                        <tr key={r.id || `${r.fecha}-${r.no_orden}-${index}`} className={`border-b border-gray-100 align-top ${index % 2 ? 'bg-gray-50' : 'bg-white'}`}>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.fecha}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.area || '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.celda?.trim() || 'SIN CELDA'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-800">{r.noOrden || r.no_orden || '—'}</td>
+                          <td className="min-w-[180px] px-3 py-2">
+                            <button type="button" onClick={() => toggleDashHallazgoFilter(r.hallazgo)}
+                              className="rounded bg-amber-50 px-2 py-1 text-left text-xs font-medium text-amber-900 hover:bg-amber-100">
+                              {r.hallazgo}
+                            </button>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.noParte || r.no_parte || '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.no_parte_requerido || '—'}</td>
+                          <td className="px-3 py-2 text-center font-semibold text-emerald-700">{r.cantidad || 0}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{r.usuario || '—'}</td>
+                          <td className="min-w-[180px] px-3 py-2">
+                            {autorizado
+                              ? <button type="button" onClick={() => setDashFilterUsuarioKitteo(current => current === autorizado ? '' : autorizado)}
+                                  className="rounded bg-indigo-50 px-2 py-1 text-left text-xs font-medium text-indigo-800 hover:bg-indigo-100">{autorizado}</button>
+                              : <button type="button" onClick={() => setDashFilterUsuarioKitteo(current => current === UNIDENTIFIED_AUTHORIZED_FILTER ? '' : UNIDENTIFIED_AUTHORIZED_FILTER)}
+                                  className="rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100">No identificable</button>}
+                          </td>
+                          <td className="min-w-[180px] max-w-[320px] break-words px-3 py-2 text-gray-700">{r.nota || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                    {dashRecordsSorted.length === 0 && (
+                      <tr><td colSpan={11} className="py-10 text-center text-gray-400">No hay registros que coincidan con los filtros actuales.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <p className="text-sm text-gray-600">
+                  Mostrando {dashRecordsSorted.length === 0 ? 0 : (dashRecordsPage - 1) * DASHBOARD_RECORDS_PER_PAGE + 1}–{Math.min(dashRecordsPage * DASHBOARD_RECORDS_PER_PAGE, dashRecordsSorted.length)} de {dashRecordsSorted.length}
+                </p>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setDashRecordsPage(page => Math.max(1, page - 1))} disabled={dashRecordsPage <= 1}
+                    aria-label="Página anterior" className="rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-sm text-gray-600">Página {dashRecordsPage} de {dashRecordsPageCount}</span>
+                  <button type="button" onClick={() => setDashRecordsPage(page => Math.min(dashRecordsPageCount, page + 1))} disabled={dashRecordsPage >= dashRecordsPageCount}
+                    aria-label="Página siguiente" className="rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2172,7 +2614,7 @@ function App() {
 
             {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {Object.entries(internoFreqSummary).map(([label, count]) => (
+              {(Object.entries(internoFreqSummary) as [string, number][]).map(([label, count]) => (
                 <div key={label} className="bg-white rounded-xl shadow p-5 flex items-center gap-4 border-l-4"
                   style={{ borderColor: FREQ_COLORS[label] }}>
                   <div className="flex-1">
