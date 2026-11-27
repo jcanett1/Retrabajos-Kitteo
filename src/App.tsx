@@ -13,6 +13,8 @@ import { supabase } from './supabaseClient'
 import InventoryCatalogDialog from './components/InventoryCatalogDialog'
 import { fetchInventoryCatalog, type PartOption } from './lib/inventoryCatalog'
 
+import { canonicalizarUsuarioKitteo } from './lib/usuarioKitteo'
+
 interface Hallazgo {
   id: string
   fecha: string
@@ -159,6 +161,8 @@ const CELDA_OPTIONS = [
 
 const RECORDS_PER_PAGE = 100
 const PARTS_PER_PAGE = 100
+
+const SUPABASE_FETCH_PAGE_SIZE = 500
 
 const FREQ_COLORS: Record<string, string> = {
   '1-2 veces': '#f59e0b',
@@ -327,12 +331,20 @@ function App() {
   const loadRegistros = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('hallazgoskitteo')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      setRegistros(data.map(item => ({
+      const allData: any[] = []
+      for (let from = 0; ; from += SUPABASE_FETCH_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('hallazgoskitteo')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1)
+        if (error) throw error
+        const page = data ?? []
+        allData.push(...page)
+        if (page.length < SUPABASE_FETCH_PAGE_SIZE) break
+      }
+      setRegistros(allData.map(item => ({
         id: item.id,
         fecha: item.fecha,
         area: item.area,
@@ -359,12 +371,20 @@ function App() {
   const loadRegistrosInterno = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('hallazgos_interno')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      setRegistrosInterno(data.map(item => ({
+      const allData: any[] = []
+      for (let from = 0; ; from += SUPABASE_FETCH_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('hallazgos_interno')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1)
+        if (error) throw error
+        const page = data ?? []
+        allData.push(...page)
+        if (page.length < SUPABASE_FETCH_PAGE_SIZE) break
+      }
+      setRegistrosInterno(allData.map(item => ({
         id: item.id,
         fecha: item.fecha,
         area: item.area,
@@ -533,7 +553,8 @@ function App() {
   [registros])
 
   const dashUsuarioKitteoOptions = useMemo(() =>
-    Array.from(new Set<string>(registros.map(r => r.usuario_kitteo || 'SIN ASIGNAR'))).sort((a, b) => a.localeCompare(b, 'es')),
+    Array.from(new Set<string>(registros.map(r => canonicalizarUsuarioKitteo(r.usuario_kitteo))))
+      .sort((a, b) => a.localeCompare(b, 'es')),
   [registros])
 
   // Base dataset for dashboard; all filters apply to charts and detail.
@@ -542,7 +563,7 @@ function App() {
       if (dashFilterNoParte && r.no_parte !== dashFilterNoParte) return false
       if (dashFilterHallazgos.length > 0 && !dashFilterHallazgos.includes(r.hallazgo)) return false
       if (dashFilterUsuario && r.usuario !== dashFilterUsuario) return false
-      if (dashFilterUsuarioKitteo && (r.usuario_kitteo || 'SIN ASIGNAR') !== dashFilterUsuarioKitteo) return false
+      if (dashFilterUsuarioKitteo && canonicalizarUsuarioKitteo(r.usuario_kitteo) !== dashFilterUsuarioKitteo) return false
       if (dashFechaDesde && r.fecha < dashFechaDesde) return false
       if (dashFechaHasta && r.fecha > dashFechaHasta) return false
       return true
@@ -641,7 +662,7 @@ function App() {
   const usuarioKitteoData = useMemo(() => {
     const counts: Record<string, { registros: number; cantidad: number }> = {}
     dashBase.forEach(r => {
-      const uk = r.usuario_kitteo || 'SIN ASIGNAR'
+      const uk = canonicalizarUsuarioKitteo(r.usuario_kitteo)
       if (!counts[uk]) counts[uk] = { registros: 0, cantidad: 0 }
       counts[uk].registros += 1
       counts[uk].cantidad += r.cantidad || 0
@@ -776,7 +797,7 @@ function App() {
   const internoUsuarioKitteoData = useMemo(() => {
     const counts: Record<string, number> = {}
     dashInternoBase.forEach(r => {
-      const uk = r.usuario_kitteo || 'SIN ASIGNAR'
+      const uk = canonicalizarUsuarioKitteo(r.usuario_kitteo)
       counts[uk] = (counts[uk] || 0) + 1
     })
     return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
