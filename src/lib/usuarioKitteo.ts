@@ -3,17 +3,18 @@ type AliasGroup = {
   aliases: string[]
 }
 
-// Solo alias confirmados; no incluye N/A, SN, FV ni nombres ambiguos.
+// Solo alias confirmados; no incluye N/A, SN ni nombres ambiguos.
 const ALIAS_GROUPS: AliasGroup[] = [
   { canonical: 'CAZARES/VALENZUELA/AZALIA YAHAIRA', aliases: ['AZALEA COTA', 'AZALIA COTA'] },
   { canonical: 'CHAVEZ/LEYVA/BRYAN ALFREDO', aliases: ['BRAYAN CHAVEZ', 'BRIAN CHAVEZ'] },
+  { canonical: 'CINTHYA LEON', aliases: ['CL'] },
   { canonical: 'Cruz Diego Lopez Vargas', aliases: ['CRUZ ', 'CRUZ LOOPEZ', 'CRUZ LOPEZ', 'Cruz Diego Lopez Vargas (CD)'] },
   { canonical: 'Diana Mendez Rodriguez', aliases: ['DIANA,ENDES', 'DIANA  MENDEZ', 'DIANA MENDEZ', 'DM'] },
   { canonical: 'Ma. Elizabeth Olivarria Sanchez', aliases: ['ELIZABETH OLIVARRIA', 'EO', 'Ma. Elizabeth Olivarria Sanchez (EO)'] },
   { canonical: 'Eleazar Santana Paes', aliases: ['ELEAZAR SANTANA', 'ES', 'Eleazar Santana Paes (ES)'] },
   { canonical: 'ESPINOZA/AMAVISZCA/EDITH/EUNICE', aliases: ['EDITH ESPINOZA', 'EE'] },
   { canonical: 'Eduardo Cervantes Salazar', aliases: ['EDUARDO SALAZAR', 'EC'] },
-  { canonical: 'Francisco Javier Vega', aliases: ['FRANCISCO VEG', 'FRANCISCO VEGA', 'FRANCISCO VEGA ', 'FRNACISCO VEGA', 'Francisco Javier Vega (FJ)'] },
+  { canonical: 'Francisco Javier Vega', aliases: ['FRANCISCO VEG', 'FRANCISCO VEGA', 'FRANCISCO VEGA ', 'FRNACISCO VEGA', 'Francisco Javier Vega (FJ)', 'FV'] },
   { canonical: 'Gil Eduardo Macedo', aliases: ['GIL M', 'GIL MACEDO', 'GIL MECEDO', 'GM'] },
   { canonical: 'Adriana Janely Sanabria Castro', aliases: ['JANELI SANABRIA', 'JANELY SANABRIA', 'AS'] },
   { canonical: 'Jorge Santillanes', aliases: ['JORGE SANTILLAN', 'JORGE SANTILLAN ', 'JS'] },
